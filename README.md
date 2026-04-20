@@ -25,7 +25,7 @@ A Windows desktop application for automated hourly logsheet management at electr
 | T1 | 9–12 | 33 kV | KV, A, MW, MVAR |
 | T2 | 13–16 | 33 kV | KV, A, MW, MVAR |
 | T3 | 17–20 | 33 kV | KV, A, MW, MVAR |
-| Feeders (Domez, Summer, Salam 1, Salam 2) | 21–24 | — | WM (MW) |
+| Feeders (FA1, FA2, FA3, FA4) | 21–24 | — | WM (MW) |
 
 ## Requirements
 
