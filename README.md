@@ -20,8 +20,8 @@ A Windows desktop application for automated hourly logsheet management at electr
 
 | Group | Columns | Bus Voltage | Measurements |
 |-------|---------|-------------|--------------|
-| Yarmja | 1–4 | 132 kV | KV, A, MW, MVAR |
-| Qayra | 5–8 | 132 kV | KV, A, MW, MVAR |
+| Branch name-1 | 1–4 | 132 kV | KV, A, MW, MVAR |
+| Branch name-2 | 5–8 | 132 kV | KV, A, MW, MVAR |
 | T1 | 9–12 | 33 kV | KV, A, MW, MVAR |
 | T2 | 13–16 | 33 kV | KV, A, MW, MVAR |
 | T3 | 17–20 | 33 kV | KV, A, MW, MVAR |
