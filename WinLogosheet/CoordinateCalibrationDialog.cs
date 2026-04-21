@@ -28,6 +28,7 @@ namespace WinLogosheet
         private NumericUpDown    _nudOffsetX, _nudOffsetY;
         private Label            _lblStatus;
         private Button           _btnPreview, _btnSave, _btnLoad, _btnReset, _btnClose;
+        private CheckBox         _chkUseImage;
 
         // ── Group offsets (one per section) ──────────────────────────────
         private readonly string[] _groupNames =
@@ -278,6 +279,17 @@ namespace WinLogosheet
                 Location = new Point(490, 36), Font = new Font("Segoe UI", 7.5f)
             };
             topPanel.Controls.Add(hint);
+
+            _chkUseImage = new CheckBox
+            {
+                Text      = "Use image as background in preview",
+                ForeColor = Color.White,
+                AutoSize  = true,
+                Checked   = false,
+                Location  = new Point(490, 10),
+                Font      = new Font("Segoe UI", 8.5f, FontStyle.Bold)
+            };
+            topPanel.Controls.Add(_chkUseImage);
 
             // ── SCROLL area ───────────────────────────────────────────────
             _scrollPanel = new Panel
@@ -636,7 +648,7 @@ namespace WinLogosheet
             _printer.OffsetYmm = (float)_nudOffsetY.Value;
 
             bool was = _printer.ShowImage;
-            _printer.ShowImage = true;
+            _printer.ShowImage = _chkUseImage != null && _chkUseImage.Checked;
             try
             {
                 if (Owner is Form1 f1)

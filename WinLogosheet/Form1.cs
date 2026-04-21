@@ -196,6 +196,9 @@ namespace WinLogosheet
             _printEnableTimer.Start();
             UpdatePrintButtonEnabled();
             UpdateColumnVisibility();
+
+
+            button_new.Text = "New   يوم جديد ";
         }
 
         // ═══════════════════════════════════════════════════════════════════
@@ -327,6 +330,12 @@ namespace WinLogosheet
             if (col >= 21)
             {
                 if (val < 0 || val > 500) return _clrSuspect;
+
+                // Feeder MW must not exceed its upstream transformer MW.
+                // Topology:  Domez→T1, Summer→T2, Salam1→T2, Salam2→T3.
+                Color xfmrCross = CheckFeederAgainstTransformer(col, val, item);
+                if (xfmrCross != Color.Empty) return xfmrCross;
+
                 return Color.Empty;
             }
 
@@ -357,6 +366,14 @@ namespace WinLogosheet
                     // 33 kV transformers: up to ~150 MW reasonable
                     if (is132kV && Math.Abs(val) > 400) return _clrSuspect;
                     if (is33kV && Math.Abs(val) > 150) return _clrSuspect;
+
+                    // Topology-based conservation:
+                    //   Qayra MW  ≥  T1 + T2 + T3 MW
+                    //   T1 MW     ≥  Domez MW
+                    //   T2 MW     ≥  Summer + Salam1 MW
+                    //   T3 MW     ≥  Salam2 MW
+                    Color topo = CheckTransformerLoadBalance(col, val, item);
+                    if (topo != Color.Empty) return topo;
                     break;
 
                 case 3: // MVAR — |MVAR| > 100 is abnormal on either voltage level
@@ -377,6 +394,74 @@ namespace WinLogosheet
             }
 
             return Color.Empty;
+        }
+
+        // Tolerance (MW) for comparing transformer input vs feeder output,
+        // covers measurement noise and transformer losses.
+        private const double _mwTolerance = 1.0;
+
+        // Transformer MW columns (sub-col 2 of each 4-col group).
+        private const int _colQayraMW = 7;
+        private const int _colT1MW = 11;
+        private const int _colT2MW = 15;
+        private const int _colT3MW = 19;
+
+        // Feeder MW columns.
+        private const int _colDomez = 21;
+        private const int _colSummer = 22;
+        private const int _colSalam1 = 23;
+        private const int _colSalam2 = 24;
+
+        private static bool TryReadDouble(ListViewItem item, int col, out double v)
+        {
+            v = 0;
+            if (item == null || col < 0 || col >= item.SubItems.Count) return false;
+            return double.TryParse(item.SubItems[col].Text, out v);
+        }
+
+        private Color CheckFeederAgainstTransformer(int feederCol, double feederMW, ListViewItem item)
+        {
+            int xfmrCol;
+            switch (feederCol)
+            {
+                case _colDomez:  xfmrCol = _colT1MW; break;
+                case _colSummer: xfmrCol = _colT2MW; break;
+                case _colSalam1: xfmrCol = _colT2MW; break;
+                case _colSalam2: xfmrCol = _colT3MW; break;
+                default: return Color.Empty;
+            }
+            if (!TryReadDouble(item, xfmrCol, out double xfmrMW)) return Color.Empty;
+            return Math.Abs(feederMW) > Math.Abs(xfmrMW) + _mwTolerance
+                 ? _clrHighMvar : Color.Empty;
+        }
+
+        private Color CheckTransformerLoadBalance(int col, double xfmrMW, ListViewItem item)
+        {
+            double sumOut = 0; bool any = false;
+
+            switch (col)
+            {
+                case _colT1MW:
+                    if (TryReadDouble(item, _colDomez, out double d)) { sumOut += Math.Abs(d); any = true; }
+                    break;
+                case _colT2MW:
+                    if (TryReadDouble(item, _colSummer, out double su)) { sumOut += Math.Abs(su); any = true; }
+                    if (TryReadDouble(item, _colSalam1, out double s1)) { sumOut += Math.Abs(s1); any = true; }
+                    break;
+                case _colT3MW:
+                    if (TryReadDouble(item, _colSalam2, out double s2)) { sumOut += Math.Abs(s2); any = true; }
+                    break;
+                case _colQayraMW:
+                    if (TryReadDouble(item, _colT1MW, out double t1)) { sumOut += Math.Abs(t1); any = true; }
+                    if (TryReadDouble(item, _colT2MW, out double t2)) { sumOut += Math.Abs(t2); any = true; }
+                    if (TryReadDouble(item, _colT3MW, out double t3)) { sumOut += Math.Abs(t3); any = true; }
+                    break;
+                default:
+                    return Color.Empty;
+            }
+
+            if (!any) return Color.Empty;
+            return sumOut > Math.Abs(xfmrMW) + _mwTolerance ? _clrHighMvar : Color.Empty;
         }
 
         // ═══════════════════════════════════════════════════════════════════
@@ -562,11 +647,29 @@ namespace WinLogosheet
         private void UpdateTextboxes(string[] nums)
         {
             ClearAllTextboxes();
-            if (nums == null || nums.Length == 0) return;
+            if (nums == null || nums.Length == 0) { UpdateTextboxValidationColors(); return; }
             var tb = GetTextBoxes();
             int max = Math.Min(nums.Length, tb.Length);
             for (int i = 0; i < max; i++) tb[i].Text = GetParseString(nums[i]);
             AttachTextChangedHandlers();
+            UpdateTextboxValidationColors();
+        }
+
+        // Mirror ListView validation colours onto the edit textboxes so errors
+        // are visible while typing, not only in the list.
+        private void UpdateTextboxValidationColors()
+        {
+            var tbs = GetTextBoxes();
+            var probe = new ListViewItem(_currentHour.ToString());
+            for (int i = 0; i < tbs.Length; i++)
+                probe.SubItems.Add(tbs[i].Text ?? string.Empty);
+
+            for (int i = 0; i < tbs.Length; i++)
+            {
+                int col = i + 1;
+                Color vc = GetValidationColor(col, tbs[i].Text ?? string.Empty, probe);
+                tbs[i].BackColor = vc == Color.Empty ? SystemColors.Window : vc;
+            }
         }
 
         private void AttachTextChangedHandlers()
@@ -579,6 +682,7 @@ namespace WinLogosheet
         {
             if (_isUpdatingFromListView) return;
             UpdateDataFromTextboxes(); UpdateListView();
+            UpdateTextboxValidationColors();
         }
 
         private void UpdateDataFromTextboxes()
@@ -869,7 +973,11 @@ namespace WinLogosheet
                     string colDesc = ColDesc(col);
                     string severity;
                     if (vc == _clrMissing) severity = "MISSING";
-                    else if (vc == _clrHighMvar) severity = "HIGH MVAR";
+                    else if (vc == _clrHighMvar)
+                    {
+                        bool isMwOrFeeder = col >= 21 || (col <= 20 && ((col - 1) % 4) == 2);
+                        severity = isMwOrFeeder ? "OVERLOAD" : "HIGH MVAR";
+                    }
                     else severity = "SUSPECT";
 
                     string detail = string.IsNullOrWhiteSpace(val) ? "(empty)" : val;
@@ -1137,6 +1245,35 @@ namespace WinLogosheet
             if (MessageBox.Show("Change current image recognition?", "Confirm",
                 MessageBoxButtons.YesNo, MessageBoxIcon.Question) == DialogResult.Yes)
                 CaptureCurrentHourFromScreenAndOcr();
+        }
+
+        private void button_New_Click(object sender, EventArgs e)
+        {
+            const string msg =
+                "⚠ تحذير — ابدأ جلسة جديدة فقط إذا كنت في يوم جديد.\r\n" +
+                "سيتم إغلاق البرنامج وإعادة تشغيله، وستفقد البيانات غير المحفوظة.\r\n" +
+                "\r\n" +
+                "WARNING — Only start a new session if this is a new day.\r\n" +
+                "The application will close and restart; any unsaved data will be lost.\r\n" +
+                "\r\n" +
+                "هل تريد المتابعة؟ / Continue?";
+
+            const string title = "جلسة جديدة / New Session";
+
+            var result = MessageBox.Show(
+                msg, title,
+                MessageBoxButtons.YesNoCancel,
+                MessageBoxIcon.Warning,
+                MessageBoxDefaultButton.Button3);
+
+            if (result != DialogResult.Yes) return;
+
+            try { Application.Restart(); }
+            catch (Exception ex)
+            {
+                MessageBox.Show("Restart failed: " + ex.Message,
+                    "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
+            }
         }
 
         // ═══════════════════════════════════════════════════════════════════

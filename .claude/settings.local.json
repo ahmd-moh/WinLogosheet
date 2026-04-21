@@ -1,0 +1,10 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(ls WinLogosheet/bin)",
+      "Bash(which msbuild *)",
+      "Bash(which dotnet *)",
+      "Bash(dotnet build *)"
+    ]
+  }
+}
