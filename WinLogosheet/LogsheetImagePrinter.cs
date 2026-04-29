@@ -12,7 +12,7 @@ namespace WinLogosheet
     /// Prints text onto the pre-printed logsheet paper.
     ///
     /// Paper size   : 450 mm W × 246.5 mm H  (landscape custom)
-    /// Hours        : Hr 8 … Hr 24  (17 rows)
+    /// Hours        : Hr 1 … Hr 24  (24 rows; workday spans 8 AM today → 7 AM next day)
     ///
     /// Coordinate system : GraphicsUnit.Millimeter (mm from paper top-left)
     /// All positions derived from pixel analysis of LogsheetTemplate.jpg (1046×568 px):
@@ -80,7 +80,7 @@ namespace WinLogosheet
         private const float GRID_TOP_PX = 99f;   // top border of Hr 1 (verified from template image)
         private const float GRID_BOT_PX  = 537f;  // bottom border of Hr 24
         private const float ROW_H_PX    = (GRID_BOT_PX - GRID_TOP_PX) / 24f;  // 18.208 px per row
-        private const int   FIRST_HOUR  = 8;
+        private const int   FIRST_HOUR  = 1;
         private const int   LAST_HOUR   = 24;
 
         private static float RowY(int hour)
@@ -270,6 +270,8 @@ namespace WinLogosheet
                 if (hour == 0) hour = 24;
                 // Only Hr 8–24
                 if (hour < FIRST_HOUR || hour > LAST_HOUR) continue;
+                // Hours the user marked as blank-on-print: leave the row empty
+                if ((item.Tag as string) == "skip") continue;
 
                 float cy = RowY(hour);
 

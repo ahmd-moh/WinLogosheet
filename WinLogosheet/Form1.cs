@@ -25,6 +25,7 @@ namespace WinLogosheet
         private System.Timers.Timer _statusTimer;
         private Label _statusLabel;
         private Dictionary<int, string[]> _hourData = new Dictionary<int, string[]>();
+        private HashSet<int> _skippedHours = new HashSet<int>();
         private bool _isUpdatingFromListView = false;
         private System.Windows.Forms.Timer _printEnableTimer;
         private const string TemplateFileName = "Exact_Substation_Log_v4.xlsx";
@@ -36,6 +37,20 @@ namespace WinLogosheet
             new int[] { 9,10,11,12 }, new int[] { 13,14,15,16 },
             new int[] { 17,18,19,20 }, new int[] { 21,22,23,24 }
         };
+
+        // Workflow hour sequence: 8 AM today through 7 AM next morning.
+        // List indices 0..16 → hours 8..24 (today), indices 17..23 → hours 1..7 (next day).
+        private static readonly int[] _hourSeq = {
+            8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24,
+            1, 2, 3, 4, 5, 6, 7
+        };
+
+        private static int GetHourIndex(int hour)
+        {
+            for (int i = 0; i < _hourSeq.Length; i++)
+                if (_hourSeq[i] == hour) return i;
+            return -1;
+        }
 
         // ── Header height ─────────────────────────────────────────────────
         private const int HEADER_H = 26;   // px — single row header
@@ -224,6 +239,7 @@ namespace WinLogosheet
             listView1.DrawColumnHeader += ListView1_DrawColumnHeader;
             listView1.DrawSubItem += ListView1_DrawSubItem;
             listView1.DrawItem += ListView1_DrawItem;
+            listView1.MouseClick += ListView1_MouseClick;
 
             // Apply custom header height once the native handle is ready
             listView1.HandleCreated += (s, e) => BeginInvoke(
@@ -472,7 +488,31 @@ namespace WinLogosheet
 
         private void ListView1_DrawSubItem(object sender, DrawListViewSubItemEventArgs e)
         {
-            if (e.ColumnIndex == 0) { e.DrawDefault = true; return; }
+            if (e.ColumnIndex == 0)
+            {
+                bool skipped = (e.Item.Tag as string) == "skip";
+                if (!skipped) { e.DrawDefault = true; return; }
+
+                // Skipped hour: keep the cell readable but draw a small red
+                // underline beneath the digit so the user can see the hour
+                // is excluded from printing.
+                Color hrBack = e.Item.Selected ? SystemColors.Highlight : Color.White;
+                Color hrFore = e.Item.Selected ? SystemColors.HighlightText : Color.Black;
+                using (var br = new SolidBrush(hrBack))
+                    e.Graphics.FillRectangle(br, e.Bounds);
+                TextRenderer.DrawText(e.Graphics, e.SubItem.Text, _cellFont, e.Bounds,
+                    hrFore, TextFormatFlags.VerticalCenter | TextFormatFlags.HorizontalCenter);
+
+                SizeF sz = e.Graphics.MeasureString(e.SubItem.Text, _cellFont);
+                float xLeft  = e.Bounds.Left + (e.Bounds.Width  - sz.Width)  / 2f + 2f;
+                float xRight = xLeft + sz.Width - 4f;
+                float y      = e.Bounds.Top  + (e.Bounds.Height + sz.Height) / 2f - 1f;
+                using (var pen = new Pen(Color.Red, 2f))
+                    e.Graphics.DrawLine(pen, xLeft, y, xRight, y);
+
+                e.Graphics.DrawRectangle(Pens.Gray, e.Bounds);
+                return;
+            }
 
             Color back;
             Color fore = Color.Black;
@@ -558,6 +598,40 @@ namespace WinLogosheet
             listView1_SelectedIndexChanged(sender, e);
         }
 
+        // Click on the Hrs cell (column 0) toggles the "blank on print" state
+        // for that hour. A small red line appears under the hour number when
+        // it will be skipped by the printer; clicking again removes the line
+        // and the hour will print normally.
+        private void ListView1_MouseClick(object sender, MouseEventArgs e)
+        {
+            if (e.Button != MouseButtons.Left) return;
+            if (listView1.Columns.Count == 0) return;
+            if (e.X >= listView1.Columns[0].Width) return;   // not the hour column
+
+            var info = listView1.HitTest(e.Location);
+            if (info.Item == null) return;
+            if (!int.TryParse(info.Item.Text, out int h)) return;
+
+            bool nowSkipped;
+            if (_skippedHours.Contains(h))
+            {
+                _skippedHours.Remove(h);
+                info.Item.Tag = null;
+                nowSkipped = false;
+            }
+            else
+            {
+                _skippedHours.Add(h);
+                info.Item.Tag = "skip";
+                nowSkipped = true;
+            }
+
+            listView1.Invalidate(info.Item.Bounds);
+            SetStatus(nowSkipped
+                ? $"Hour {h:00} will be blank on the printout"
+                : $"Hour {h:00} restored — will print normally", 3000);
+        }
+
         private void LoadCurrentImageFromData()
         {
             if (!_hourData.ContainsKey(_currentHour)) return;
@@ -593,13 +667,18 @@ namespace WinLogosheet
             => Path.Combine(Application.StartupPath,
                             DateTime.Now.ToString("MM-yyyy") + ".xlsx");
 
+        // Print becomes available once real wall-clock time reaches 7 AM the
+        // morning the workday ends, and stays enabled for the wrap-up hour
+        // (7:00 – 7:59 AM). At 8 AM a new workday begins, so the button
+        // disables again until the user starts a new session via "New".
         private void UpdatePrintButtonEnabled()
-            => button_OnPrint.Enabled =  (_currentHour == 24);   // Always available; validation runs on click
+            => button_OnPrint.Enabled = (DateTime.Now.Hour == 7);
 
         private void LoadCurrentImage()
         {
-            if (_currentHour == 25) _currentHour = 8;
-            if (_currentHour == 1) _currentHour = 7;
+            // _currentHour must be a valid hour in the workflow sequence (8..24, 1..7).
+            // If somehow set outside the sequence, snap to the start of the workday.
+            if (GetHourIndex(_currentHour) < 0) _currentHour = _hourSeq[0];
             string ip = GetCurrentImagePath();
             if (File.Exists(ip))
             {
@@ -696,9 +775,7 @@ namespace WinLogosheet
         private void UpdateListView()
         {
             listView1.Items.Clear();
-            var hrs = new List<int>();
-            for (int i = 7; i <= 24; i++) hrs.Add(i);
-            foreach (int h in hrs)
+            foreach (int h in _hourSeq)
                 if (_hourData.ContainsKey(h)) AddHourToListView(h, _hourData[h]);
             SelectCurrentHourInListView();
         }
@@ -709,6 +786,7 @@ namespace WinLogosheet
             int max = Math.Min(nums.Length, 24);
             for (int i = 0; i < max; i++) item.SubItems.Add(GetParseString(nums[i]));
             for (int i = max; i < 24; i++) item.SubItems.Add("");
+            if (_skippedHours.Contains(hour)) item.Tag = "skip";
             listView1.Items.Add(item);
         }
 
@@ -741,26 +819,54 @@ namespace WinLogosheet
         // ═══════════════════════════════════════════════════════════════════
         private void button_prv_Click(object sender, EventArgs e)
         {
-            if (_currentHour == 0) _currentHour = 24;
-            if (_currentHour > 8)
-            { _currentHour--; LoadCurrentImage(); SelectCurrentHourInListView(); }
-            else SetStatus("Already at the first image (08.png)", 3000);
+            int idx = GetHourIndex(_currentHour);
+            if (idx <= 0)
+            { SetStatus("Already at the first image (08.png)", 3000); return; }
+            _currentHour = _hourSeq[idx - 1];
+            LoadCurrentImage();
+            SelectCurrentHourInListView();
         }
 
+        // Real-time hour mapped onto the workflow sequence (returns 24 at midnight).
+        // bInc=true returns the next hour in the workflow sequence (or stays at 7 if past the end).
         int GetCuurentHour(bool bInc = false)
-            => DateTime.Now.Hour == 0 ? 24 : DateTime.Now.Hour + (bInc ? 1 : 0);
+        {
+            int h = DateTime.Now.Hour == 0 ? 24 : DateTime.Now.Hour;
+            if (!bInc) return h;
+            int i = GetHourIndex(h);
+            if (i < 0 || i >= _hourSeq.Length - 1) return _hourSeq[_hourSeq.Length - 1];
+            return _hourSeq[i + 1];
+        }
 
         private void button_next_Click(object sender, EventArgs e)
         {
-            if (_currentHour >= GetCuurentHour(true))
+            int idx = GetHourIndex(_currentHour);
+            int curIdx = GetHourIndex(GetCuurentHour());
+
+            if (idx >= 0 && curIdx >= 0 && idx > curIdx)
             { SetStatus("Cannot goes far to the current hour", 3000); return; }
-            if (_currentHour <= 24 && _currentHour > 0)
-            { _currentHour++; LoadCurrentImage(); SelectCurrentHourInListView(); }
-            else SetStatus("Already at the last image (24.png)", 3000);
+
+            if (idx < 0 || idx >= _hourSeq.Length - 1)
+            { SetStatus("Already at the last image (07.png)", 3000); return; }
+
+            _currentHour = _hourSeq[idx + 1];
+            LoadCurrentImage();
+            SelectCurrentHourInListView();
         }
 
-        private int GetPreviousHour(int h) => h == 8 ? 24 : h == 0 ? 23 : h - 1;
-        private int GetNextHour(int h) => h == 24 ? 8 : h == 23 ? 0 : h + 1;
+        private int GetPreviousHour(int h)
+        {
+            int i = GetHourIndex(h);
+            if (i < 0) return _hourSeq[0];
+            return _hourSeq[(i - 1 + _hourSeq.Length) % _hourSeq.Length];
+        }
+
+        private int GetNextHour(int h)
+        {
+            int i = GetHourIndex(h);
+            if (i < 0) return _hourSeq[_hourSeq.Length - 1];
+            return _hourSeq[(i + 1) % _hourSeq.Length];
+        }
 
         private void button_copy_fromPrev_Click(object sender, EventArgs e)
         {
@@ -962,6 +1068,7 @@ namespace WinLogosheet
             foreach (ListViewItem item in listView1.Items)
             {
                 if (!int.TryParse(item.Text, out int hour)) continue;
+                if ((item.Tag as string) == "skip") continue;   // user marked this hour blank
                 if (!RowHasAnyData(item)) continue;   // skip hours with no data at all
 
                 for (int col = 1; col < item.SubItems.Count; col++)
@@ -1279,6 +1386,14 @@ namespace WinLogosheet
         // ═══════════════════════════════════════════════════════════════════
         //  TASK SCHEDULER
         // ═══════════════════════════════════════════════════════════════════
+        // Workday end-boundary: 7:30 AM of the morning that closes the current 8AM→7AM workday.
+        private static DateTime ComputeWorkdayEndBoundary(DateTime now)
+        {
+            DateTime workdayStart = now.Date.AddHours(8);
+            if (now.Hour < 8) workdayStart = workdayStart.AddDays(-1);
+            return workdayStart.AddHours(23).AddMinutes(30);
+        }
+
         private bool TaskNeedsUpdate()
         {
             string name = "ScreenCapHourlyTask", vbs = Application.StartupPath + "\\screencap.vbs";
@@ -1289,8 +1404,8 @@ namespace WinLogosheet
                 var t = ex.Definition.Triggers[0] as TimeTrigger; if (t == null) return true;
                 if (t.StartBoundary.Minute != 2) return true;
                 if (t.Repetition.Interval != TimeSpan.FromHours(1)) return true;
-                if (t.EndBoundary != t.StartBoundary.AddDays(1)) return true;
                 if (DateTime.Now > t.EndBoundary) return true;
+                if (t.EndBoundary < ComputeWorkdayEndBoundary(DateTime.Now)) return true;
                 if (ex.Definition.Settings.DeleteExpiredTaskAfter != TimeSpan.FromMinutes(5)) return true;
                 var a = ex.Definition.Actions[0] as ExecAction;
                 if (a == null || !a.Arguments.Contains(vbs)) return true;
@@ -1310,7 +1425,8 @@ namespace WinLogosheet
                     var now = DateTime.Now;
                     var start = new DateTime(now.Year, now.Month, now.Day, now.Hour, 2, 0);
                     if (DateTime.Now > start) start = start.AddHours(1);
-                    var exp = new DateTime(start.Year, start.Month, start.Day, 0, 2, 0).AddDays(1);
+                    var exp = ComputeWorkdayEndBoundary(now);
+                    if (exp <= start) exp = start.AddHours(1);
                     td.Triggers.Add(new TimeTrigger
                     {
                         StartBoundary = start,

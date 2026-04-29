@@ -4,7 +4,11 @@
       "Bash(ls WinLogosheet/bin)",
       "Bash(which msbuild *)",
       "Bash(which dotnet *)",
-      "Bash(dotnet build *)"
+      "Bash(dotnet build *)",
+      "Bash(where msbuild *)",
+      "Bash(where dotnet *)",
+      "Bash(\"C:\\\\Program Files\\\\Microsoft Visual Studio\\\\2022\\\\Professional\\\\MSBuild\\\\Current\\\\Bin\\\\amd64\\\\MSBuild.exe\" \"D:\\\\VisualStudio\\\\CSharp\\\\WinLogosheet\\\\WinLogosheet.sln\" -t:Build -p:Configuration=Debug -nologo -v:minimal)",
+      "Bash(\"/c/Program Files/Microsoft Visual Studio/2022/Professional/MSBuild/Current/Bin/amd64/MSBuild.exe\" WinLogosheet.sln -t:Build -p:Configuration=Debug -nologo -v:minimal)"
     ]
   }
 }
