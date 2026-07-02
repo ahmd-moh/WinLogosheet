@@ -201,8 +201,9 @@ namespace WinLogosheet
             }
 
             _imageFolderPath = Path.Combine(Application.StartupPath,
-                $"Screenshots-{DateTime.Now:yyyy-MM-dd}");
+                $"Screenshots-{GetSessionDate():yyyy-MM-dd}");
 
+            EnsureMissingHourPlaceholders();
             LoadCurrentImage();
             SetStatus("Ready", 2000);
 
@@ -230,9 +231,10 @@ namespace WinLogosheet
             // NO Padding, NO ROW_TOP_MARGIN — they break scrolling
 
             var ar = new CultureInfo("ar-IQ");
+            DateTime sessionDate = GetSessionDate();
             lable_date.Text =
-                $"التاريخ : {DateTime.Now.ToString("yyyy/MM/dd", ar)}" +
-                $" - {DateTime.Now.ToString("dddd", ar)}";
+                $"التاريخ : {sessionDate.ToString("yyyy/MM/dd", ar)}" +
+                $" - {sessionDate.ToString("dddd", ar)}";
 
             listView1.Items.Clear();
             listView1.SelectedIndexChanged += ListView1_SelectedIndexChanged;
@@ -378,22 +380,21 @@ namespace WinLogosheet
                     break;
 
                 case 2: // MW — rated capacity limits
-                    // 132 kV lines: up to ~400 MW reasonable
-                    // 33 kV transformers: up to ~150 MW reasonable
-                    if (is132kV && Math.Abs(val) > 400) return _clrSuspect;
+                    // 132 kV section (Yarmja/Qayra) is intentionally NOT validated
+                    // for MW: real readings can be small (e.g. 10 MW) and the
+                    // topology check vs T1+T2+T3 produces false yellows. Only the
+                    // 33 kV transformers carry MW validation; feeders are checked
+                    // separately above against their parent transformer.
                     if (is33kV && Math.Abs(val) > 150) return _clrSuspect;
-
-                    // Topology-based conservation:
-                    //   Qayra MW  ≥  T1 + T2 + T3 MW
-                    //   T1 MW     ≥  Domez MW
-                    //   T2 MW     ≥  Summer + Salam1 MW
-                    //   T3 MW     ≥  Salam2 MW
-                    Color topo = CheckTransformerLoadBalance(col, val, item);
-                    if (topo != Color.Empty) return topo;
+                    if (is33kV)
+                    {
+                        Color topo = CheckTransformerLoadBalance(col, val, item);
+                        if (topo != Color.Empty) return topo;
+                    }
                     break;
 
-                case 3: // MVAR — |MVAR| > 100 is abnormal on either voltage level
-                    if (Math.Abs(val) > 100)
+                case 3: // MVAR — only validated on 33 kV transformers
+                    if (is33kV && Math.Abs(val) > 100)
                     {
                         // Cross-check: if KV of same group is in normal range, the
                         // line is energised → likely OCR misread → orange warning.
@@ -402,8 +403,7 @@ namespace WinLogosheet
                         double kv = 0;
                         if (kvIdx > 0 && kvIdx < item.SubItems.Count)
                             double.TryParse(item.SubItems[kvIdx].Text, out kv);
-                        bool kvOk = is132kV ? (kv >= 118 && kv <= 145)
-                                            : (kv >= 28 && kv <= 38);
+                        bool kvOk = (kv >= 28 && kv <= 38);
                         return kvOk ? _clrHighMvar : _clrSuspect;
                     }
                     break;
@@ -712,6 +712,57 @@ namespace WinLogosheet
                 { item.Selected = true; item.EnsureVisible(); break; }
         }
 
+        // When a session is started later than 8 AM, the hours between the
+        // workday start (08) and the current hour were never captured — the
+        // scheduled task only begins firing at the next :02. Those PNGs are
+        // missing, which blocks the Next button (button_next_Click requires the
+        // target image on disk) and can leave the operator stuck on hour 08,
+        // unable to even reach the current hour to capture it.
+        //
+        // Fill each missed past hour with a blank white placeholder PNG so
+        // navigation works. A blank image OCRs to nothing, so the row stays
+        // empty (no false validation errors) and the operator can type the
+        // readings manually, or recapture the live hour to overwrite it.
+        private void EnsureMissingHourPlaceholders()
+        {
+            try
+            {
+                // Hours elapsed since this session's workday start (08:00 of the
+                // session date). Robust across the midnight boundary. We fill up
+                // to elapsed-1 so the live (current) hour is left uncaptured — it
+                // still shows the "no image" panel and is captured live instead;
+                // button_next_Click allows stepping onto it despite the missing
+                // file. lastIdx < 0 means the workday's first hour is still live.
+                DateTime sessionStart = GetSessionDate().Date.AddHours(8);
+                int elapsed = (int)Math.Floor((DateTime.Now - sessionStart).TotalHours);
+                int lastIdx = Math.Min(elapsed - 1, _hourSeq.Length - 1);
+                if (lastIdx < 0) return;
+
+                if (!Directory.Exists(_imageFolderPath))
+                    Directory.CreateDirectory(_imageFolderPath);
+
+                int created = 0;
+                for (int i = 0; i <= lastIdx; i++)
+                {
+                    string path = Path.Combine(_imageFolderPath, $"{_hourSeq[i]:00}.png");
+                    if (File.Exists(path)) continue;
+                    using (var bmp = new Bitmap(_captureRegion.Width, _captureRegion.Height))
+                    using (var g = Graphics.FromImage(bmp))
+                    {
+                        g.Clear(Color.White);
+                        bmp.Save(path, System.Drawing.Imaging.ImageFormat.Png);
+                    }
+                    created++;
+                }
+                if (created > 0)
+                    SetStatus($"Created {created} blank placeholder image(s) for missed hours", 3000);
+            }
+            catch (Exception ex)
+            {
+                SetStatus("Could not create placeholder images: " + ex.Message, 4000);
+            }
+        }
+
         private string GetCurrentImagePath()
             => Path.Combine(_imageFolderPath, $"{_currentHour:00}.png");
 
@@ -760,16 +811,28 @@ namespace WinLogosheet
         private void TextBox_TextChanged(object sender, EventArgs e)
         {
             if (_isUpdatingFromListView) return;
-            UpdateDataFromTextboxes(); UpdateListView();
+            // Guard the ListView rebuild: clearing items fires SelectedIndexChanged
+            // which would re-enter LoadCurrentImageFromData -> UpdateTextboxes and
+            // reset the caret to position 0 mid-typing (typing "1" then "0" became "01").
+            _isUpdatingFromListView = true;
+            try { UpdateDataFromTextboxes(); UpdateListView(); }
+            finally { _isUpdatingFromListView = false; }
             UpdateTextboxValidationColors();
         }
 
         private void UpdateDataFromTextboxes()
         {
-            var list = new List<string>();
-            foreach (var t in GetTextBoxes())
-                if (!string.IsNullOrEmpty(t.Text)) list.Add(t.Text);
-            _hourData[_currentHour] = list.ToArray();
+            // Preserve positional layout: keep empty slots in place so a missing
+            // value in the middle (or at the bottom with later edits) does not
+            // shift subsequent textboxes/columns up when the hour is reloaded.
+            var tbs = GetTextBoxes();
+            int last = -1;
+            for (int i = 0; i < tbs.Length; i++)
+                if (!string.IsNullOrEmpty(tbs[i].Text)) last = i;
+
+            var arr = new string[last + 1];
+            for (int i = 0; i <= last; i++) arr[i] = tbs[i].Text ?? string.Empty;
+            _hourData[_currentHour] = arr;
         }
 
         private void UpdateListView()
@@ -831,6 +894,7 @@ namespace WinLogosheet
         // bInc=true returns the next hour in the workflow sequence (or stays at 7 if past the end).
         int GetCuurentHour(bool bInc = false)
         {
+
             int h = DateTime.Now.Hour == 0 ? 24 : DateTime.Now.Hour;
             if (!bInc) return h;
             int i = GetHourIndex(h);
@@ -841,15 +905,27 @@ namespace WinLogosheet
         private void button_next_Click(object sender, EventArgs e)
         {
             int idx = GetHourIndex(_currentHour);
-            int curIdx = GetHourIndex(GetCuurentHour());
-
-            if (idx >= 0 && curIdx >= 0 && idx > curIdx)
-            { SetStatus("Cannot goes far to the current hour", 3000); return; }
 
             if (idx < 0 || idx >= _hourSeq.Length - 1)
             { SetStatus("Already at the last image (07.png)", 3000); return; }
 
-            _currentHour = _hourSeq[idx + 1];
+            int targetHour = _hourSeq[idx + 1];
+            string targetImagePath = Path.Combine(_imageFolderPath, $"{targetHour:00}.png");
+
+            // Freeze only when the target hour has not been captured yet AND
+            // real-world time has not reached it. If the .png is already on
+            // disk the hour is fully recorded, so allow navigation regardless
+            // of the wall clock. When the image is missing we still allow
+            // stepping ONTO the current wall-clock hour (so the operator can
+            // reach the live hour to capture it) but block going PAST it.
+            if (!File.Exists(targetImagePath))
+            {
+                int curIdx = GetHourIndex(GetCuurentHour());
+                if (curIdx >= 0 && idx >= curIdx)
+                { SetStatus("Cannot goes far to the current hour", 3000); return; }
+            }
+
+            _currentHour = targetHour;
             LoadCurrentImage();
             SelectCurrentHourInListView();
         }
@@ -1023,10 +1099,35 @@ namespace WinLogosheet
         protected override void OnFormClosed(FormClosedEventArgs e)
         { _statusTimer?.Stop(); _statusTimer?.Dispose(); base.OnFormClosed(e); }
 
+        // Position lock: the app screenshots a fixed screen region behind
+        // itself (_captureRegion = 50,192,50,530). Any drift of the form
+        // over that region produces a broken capture that OCR cannot fix.
+        // We pin the window to its initial location and refuse user moves.
+        private Point? _lockedLocation;
+
         protected override void OnShown(EventArgs e)
         {
             base.OnShown(e);
             EnsureHeaderHeight();
+
+            // Nudge the form 100px right of the centered start position so it
+            // clears the capture region on the left edge of the screen.
+            this.Location = new Point(this.Location.X + 50, this.Location.Y);
+            _lockedLocation = this.Location;
+            this.LocationChanged += (s, _) =>
+            {
+                if (_lockedLocation.HasValue && this.Location != _lockedLocation.Value)
+                    this.Location = _lockedLocation.Value;
+            };
+        }
+
+        protected override void WndProc(ref Message m)
+        {
+            const int WM_SYSCOMMAND = 0x0112;
+            const int SC_MOVE = 0xF010;
+            if (m.Msg == WM_SYSCOMMAND && (m.WParam.ToInt32() & 0xFFF0) == SC_MOVE)
+                return;
+            base.WndProc(ref m);
         }
 
         private void OnNext(object sender, KeyEventArgs e) => button_next_Click(sender, e);
@@ -1394,6 +1495,39 @@ namespace WinLogosheet
             return workdayStart.AddHours(23).AddMinutes(30);
         }
 
+        // Date used by the current session: the StartBoundary date of the existing
+        // ScreenCapHourlyTask. If no task exists yet, fall back to today. The date
+        // only advances when the user creates a new task (via the "New" flow that
+        // restarts the app and clicks تشغيل).
+        private DateTime GetSessionDate()
+        {
+            try
+            {
+                using (var ts = new TaskService())
+                {
+                    var ex = ts.GetTask("ScreenCapHourlyTask");
+                    if (ex != null && ex.Definition.Triggers.Count > 0
+                        && ex.Definition.Triggers[0] is TimeTrigger t)
+                        return t.StartBoundary.Date;
+                }
+            }
+            catch { }
+            return DateTime.Now.Date;
+        }
+
+        private void RefreshSessionDateUi()
+        {
+            var ar = new CultureInfo("ar-IQ");
+            DateTime sessionDate = GetSessionDate();
+            lable_date.Text =
+                $"التاريخ : {sessionDate.ToString("yyyy/MM/dd", ar)}" +
+                $" - {sessionDate.ToString("dddd", ar)}";
+            _imageFolderPath = Path.Combine(Application.StartupPath,
+                $"Screenshots-{sessionDate:yyyy-MM-dd}");
+            EnsureMissingHourPlaceholders();
+            LoadCurrentImage();
+        }
+
         private bool TaskNeedsUpdate()
         {
             string name = "ScreenCapHourlyTask", vbs = Application.StartupPath + "\\screencap.vbs";
@@ -1444,7 +1578,7 @@ namespace WinLogosheet
 
         private void button_Start_Click(object sender, EventArgs e)
         {
-            if (TaskNeedsUpdate()) { CreateHourlyTask(); button_start.Enabled = false; }
+            if (TaskNeedsUpdate()) { CreateHourlyTask(); RefreshSessionDateUi(); button_start.Enabled = false; }
             else MessageBox.Show("Task already exists and is valid.");
         }
 
