@@ -75,6 +75,7 @@
             this.lable_date = new System.Windows.Forms.Label();
             this.label22 = new System.Windows.Forms.Label();
             this.button_OnPrint = new System.Windows.Forms.Button();
+            this.button_SendToDevice = new System.Windows.Forms.Button();
             this.colorDialog1 = new System.Windows.Forms.ColorDialog();
             this.button_UpdateCurrHImage = new System.Windows.Forms.Button();
             this.textBox1 = new System.Windows.Forms.TextBox();
@@ -786,7 +787,20 @@
             this.button_OnPrint.Text = "طباعة";
             this.button_OnPrint.UseVisualStyleBackColor = true;
             this.button_OnPrint.Click += new System.EventHandler(this.buttonOnPrint);
-            // 
+            //
+            // button_SendToDevice
+            //
+            this.button_SendToDevice.Anchor = ((System.Windows.Forms.AnchorStyles)((System.Windows.Forms.AnchorStyles.Bottom | System.Windows.Forms.AnchorStyles.Left)));
+            this.button_SendToDevice.Font = new System.Drawing.Font("Microsoft Sans Serif", 11.25F, System.Drawing.FontStyle.Regular, System.Drawing.GraphicsUnit.Point, ((byte)(0)));
+            this.button_SendToDevice.Location = new System.Drawing.Point(462, 733);
+            this.button_SendToDevice.Margin = new System.Windows.Forms.Padding(2, 3, 2, 3);
+            this.button_SendToDevice.Name = "button_SendToDevice";
+            this.button_SendToDevice.Size = new System.Drawing.Size(200, 29);
+            this.button_SendToDevice.TabIndex = 11;
+            this.button_SendToDevice.Text = "Send to Device";
+            this.button_SendToDevice.UseVisualStyleBackColor = true;
+            this.button_SendToDevice.Click += new System.EventHandler(this.button_SendToDevice_Click);
+            //
             // button_UpdateCurrHImage
             // 
             this.button_UpdateCurrHImage.Anchor = ((System.Windows.Forms.AnchorStyles)((System.Windows.Forms.AnchorStyles.Bottom | System.Windows.Forms.AnchorStyles.Left)));
@@ -3518,6 +3532,7 @@
             this.Controls.Add(this.checkBoxYarema);
             this.Controls.Add(this.panel98);
             this.Controls.Add(this.button_OnPrint);
+            this.Controls.Add(this.button_SendToDevice);
             this.Controls.Add(this.panel20);
             this.Controls.Add(this.listView1);
             this.Controls.Add(this.statusStrip1);
@@ -3670,6 +3685,7 @@
         private System.Windows.Forms.Label lable_date;
         private System.Windows.Forms.Label label22;
         private System.Windows.Forms.Button button_OnPrint;
+        private System.Windows.Forms.Button button_SendToDevice;
         private System.Windows.Forms.ColorDialog colorDialog1;
         private System.Windows.Forms.Button button_UpdateCurrHImage;
         private System.Windows.Forms.Button button_start;

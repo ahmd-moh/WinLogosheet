@@ -1275,6 +1275,37 @@ namespace WinLogosheet
             }
         }
 
+        // ═══════════════════════════════════════════════════════════════════
+        //  SEND TO DEVICE  (offline QR transfer)
+        //  Gathers the whole on-screen grid (7-24-7 hours × 24 readings) plus
+        //  the session date, serialises it to a compact alphanumeric payload and
+        //  pops up a freshly generated QR code for a companion mobile app to
+        //  scan. Everything is local — no network is used.
+        // ═══════════════════════════════════════════════════════════════════
+        private void button_SendToDevice_Click(object sender, EventArgs e)
+        {
+            if (listView1.Items.Count == 0)
+            {
+                MessageBox.Show("There are no hours to send yet.", "Send to Device",
+                    MessageBoxButtons.OK, MessageBoxIcon.Information);
+                return;
+            }
+
+            try
+            {
+                string payload = LogsheetQr.BuildPayload(listView1, GetSessionDate());
+                using (var dlg = new QrCodeForm(payload, "Send to Device — Scan QR"))
+                    dlg.ShowDialog(this);
+                SetStatus("QR generated for mobile transfer.", 3000);
+            }
+            catch (Exception ex)
+            {
+                SetStatus("QR error: " + ex.Message, 5000);
+                MessageBox.Show("Could not create the QR code:\n" + ex.Message,
+                    "Send to Device", MessageBoxButtons.OK, MessageBoxIcon.Error);
+            }
+        }
+
 
        
         private void buttonCalibrate_Click(object sender, EventArgs e)
