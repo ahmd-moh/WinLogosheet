@@ -11,6 +11,7 @@
   "logFolder": "Logs",
   "retentionDays": 120,
   "showTrayIcon": false,
+  "runAtLogon": false,
   "exitWhenSessionEnds": false,
   "keepFullScreenshots": false,
   "listenAddress": "0.0.0.0",

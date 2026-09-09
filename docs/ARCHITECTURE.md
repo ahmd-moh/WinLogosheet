@@ -73,6 +73,11 @@ By default a node that reaches 07:00 stays in memory but idle, so the QR hotkey
 still works at exactly the moment the day is read. Set `exitWhenSessionEnds` to
 `true` in either config if you would rather the process quit.
 
+`runAtLogon` (off by default) registers the node under the per-user `Run` key so
+it survives a reboot. That is a different thing from the daily restart: it fires
+on logon, not at 07:00, so on a machine that stays logged in it never fires
+again and tomorrow's session is still started by hand.
+
 ## Only the marked boxes are read
 
 Each node carries an ROI file listing the boxes it reads. Nothing else on the
@@ -215,6 +220,7 @@ Shared/Capture/      capture and OCR, compiled into both nodes
   HourlyScheduler.cs the :02 trigger, bounded by the run window
   NodeLog.cs         day-stamped log file
   HiddenHost.cs      windowless host, optional tray icon
+  LogonAutostart.cs  optional per-user Run entry
 Shared/Qr/
   QrEncoder.cs       self-contained QR encoder, byte and alphanumeric modes
   LogsheetQr.cs      the LS1 payload the phone scans

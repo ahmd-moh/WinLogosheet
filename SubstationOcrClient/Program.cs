@@ -44,11 +44,11 @@ namespace SubstationOcrClient
             using (var single = new Mutex(true, @"Global\SubstationOcrClient_" + config.NodeId, out isFirst))
             {
                 if (!isFirst) return; // a second instance would double every reading
-                Run(config, args);
+                Run(config, configPath, args);
             }
         }
 
-        private static void Run(ClientConfig config, string[] args)
+        private static void Run(ClientConfig config, string configPath, string[] args)
         {
             var log = new NodeLog(config.ResolvePath(config.LogFolder));
             log.Info("=== " + Product + " " + Version + " starting on " + Environment.MachineName +
@@ -75,6 +75,13 @@ namespace SubstationOcrClient
                 capture.Dispose();
                 return;
             }
+
+            LogonAutostart.Apply(
+                "SubstationOcrClient",
+                config.RunAtLogon,
+                LogonAutostart.BuildCommand(Application.ExecutablePath, configPath,
+                                            Path.Combine(Application.StartupPath, "client.config.json")),
+                log);
 
             var scheduler = new HourlyScheduler(config, capture, store, log);
             var uplink = new ReadingUplink(config, store, log);

@@ -80,6 +80,9 @@
     <Compile Include="..\Shared\Capture\HourlyScheduler.cs">
       <Link>Shared\HourlyScheduler.cs</Link>
     </Compile>
+    <Compile Include="..\Shared\Capture\LogonAutostart.cs">
+      <Link>Shared\LogonAutostart.cs</Link>
+    </Compile>
     <Compile Include="..\Shared\Capture\NodeConfig.cs">
       <Link>Shared\NodeConfig.cs</Link>
     </Compile>

@@ -49,11 +49,11 @@ namespace SubstationOcrServer
             using (var single = new Mutex(true, @"Global\SubstationOcrServer_" + config.NodeId, out isFirst))
             {
                 if (!isFirst) return;
-                Run(config, args);
+                Run(config, configPath, args);
             }
         }
 
-        private static void Run(ServerConfig config, string[] args)
+        private static void Run(ServerConfig config, string configPath, string[] args)
         {
             var log = new NodeLog(config.ResolvePath(config.LogFolder));
             log.Info("=== " + Product + " " + Version + " starting on " + Environment.MachineName +
@@ -81,6 +81,13 @@ namespace SubstationOcrServer
                 capture.Dispose();
                 return;
             }
+
+            LogonAutostart.Apply(
+                "SubstationOcrServer",
+                config.RunAtLogon,
+                LogonAutostart.BuildCommand(Application.ExecutablePath, configPath,
+                                            Path.Combine(Application.StartupPath, "server.config.json")),
+                log);
 
             var scheduler = new HourlyScheduler(config, capture, store, log);
             var server = new ReadingServer(config, merged, store, capture, log);

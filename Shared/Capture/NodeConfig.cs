@@ -46,6 +46,12 @@ namespace Substation.Capture
         /// </summary>
         public bool ShowTrayIcon = false;
 
+        /// <summary>
+        /// Start this node when the SCADA account logs on. Covers a reboot; it
+        /// does not restart the daily session, which stays a manual act.
+        /// </summary>
+        public bool RunAtLogon = false;
+
         /// <summary>Quit the process when the 07:00 window closes, instead of
         /// going idle. Idle keeps the server's QR hotkey usable at 07:00, which
         /// is exactly when the day is read, so this ships off.</summary>
@@ -78,6 +84,7 @@ namespace Substation.Capture
             LogFolder = Json.Str(root, "logFolder", LogFolder);
             RetentionDays = Json.Int(root, "retentionDays", RetentionDays);
             ShowTrayIcon = Json.Bool(root, "showTrayIcon", ShowTrayIcon);
+            RunAtLogon = Json.Bool(root, "runAtLogon", RunAtLogon);
             ExitWhenSessionEnds = Json.Bool(root, "exitWhenSessionEnds", ExitWhenSessionEnds);
             KeepFullScreenshots = Json.Bool(root, "keepFullScreenshots", KeepFullScreenshots);
         }
@@ -95,6 +102,7 @@ namespace Substation.Capture
             root["logFolder"] = LogFolder;
             root["retentionDays"] = RetentionDays;
             root["showTrayIcon"] = ShowTrayIcon;
+            root["runAtLogon"] = RunAtLogon;
             root["exitWhenSessionEnds"] = ExitWhenSessionEnds;
             root["keepFullScreenshots"] = KeepFullScreenshots;
         }

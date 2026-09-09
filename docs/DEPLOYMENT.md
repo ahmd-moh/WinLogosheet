@@ -36,6 +36,8 @@ warning at start-up saying so.
    - `qrSeconds` — 3 to 5.
    - `qrScreen` — `"primary"` (the operator's own screen, the default),
      `"secondary"`, or a screen index.
+   - `runAtLogon` — `true` to have this node start when the SCADA account logs
+     on. See [below](#surviving-a-reboot-runatlogon).
 4. Open **TCP 5115 inbound** in Windows Firewall for this program.
 
 ## 4. Install on the 33 kV server
@@ -45,7 +47,7 @@ warning at start-up saying so.
 3. Edit it:
    - `sharedSecret` — the **same** string.
    - `serverHost` — the 132 kV server's LAN address.
-   - `tessDataPath`, `captureScreen` — as above.
+   - `tessDataPath`, `captureScreen`, `runAtLogon` — as above.
 
 No inbound firewall rule is needed here; the client only connects out.
 
@@ -112,11 +114,27 @@ It is always a **single** code: the payload is the `LS1` format the companion ap
 already parses, and that app has no notion of multi-part codes. If a session
 ever will not fit at error correction M the node drops to L automatically.
 
-### Starting a session automatically
+### Surviving a reboot: `runAtLogon`
 
-If you would rather not start them by hand, use a Task Scheduler task on each
-server: trigger **Daily at 07:00**, **Run only when user is logged on**, action
-the executable.
+Set `"runAtLogon": true` in either config and that node registers itself under
+the per-user `Run` key, so it comes back when the SCADA account logs on. No
+administrator rights are needed, and the node lands in the interactive session —
+which it must, because a background session can neither capture the screen nor
+own a global hotkey.
+
+The setting is authoritative in both directions: setting it back to `false` and
+starting the node once **removes** the entry. The registered command is
+re-checked every start, so a rebuilt or moved executable heals itself, and a
+node launched with `--config <path>` registers that same argument.
+
+**This is not the daily restart.** It covers a reboot or a logoff. A node that
+reaches 07:00 goes quiet and stays quiet, and on a machine that is never logged
+out the entry never fires again — starting tomorrow's session is still a manual
+act, as specified.
+
+If you want the session started for you as well, use a Task Scheduler task on
+each server instead: trigger **Daily at 07:00**, **Run only when user is logged
+on**, action the executable.
 
 Do **not** register either node as a Windows service — a service cannot capture
 the screen.
@@ -127,6 +145,7 @@ Everything goes to `Logs\node-YYYY-MM-DD.log` on each node.
 
 | Symptom | Where to look |
 |---|---|
+| Node did not come back after a reboot | `runAtLogon` must be `true` **and** the node must have been started once since; the log records `Autostart registered`. It only fires on logon, not on a machine left logged in |
 | Nothing gathered at all | the log's start-up line names the screen being read; if it says "no secondary screen is attached", `captureScreen` needs changing |
 | Client log: "No answer from host:5115" | firewall, wrong `serverHost`, or the server node is not running |
 | Client log: "signature mismatch" | the two `sharedSecret` values differ |
