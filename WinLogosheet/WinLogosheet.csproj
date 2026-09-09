@@ -97,6 +97,7 @@
     <Reference Include="System.Deployment" />
     <Reference Include="System.Drawing" />
     <Reference Include="System.Net.Http" />
+    <Reference Include="System.Web.Extensions" />
     <Reference Include="System.Windows.Forms" />
     <Reference Include="System.Xml" />
     <Reference Include="Tesseract, Version=5.2.0.0, Culture=neutral, processorArchitecture=MSIL">
@@ -104,6 +105,38 @@
     </Reference>
   </ItemGroup>
   <ItemGroup>
+    <Compile Include="..\Shared\Protocol\AgentProtocol.cs">
+      <Link>Shared\AgentProtocol.cs</Link>
+    </Compile>
+    <Compile Include="..\Shared\Protocol\ColumnMap.cs">
+      <Link>Shared\ColumnMap.cs</Link>
+    </Compile>
+    <Compile Include="..\Shared\Protocol\Json.cs">
+      <Link>Shared\Json.cs</Link>
+    </Compile>
+    <Compile Include="..\Shared\Protocol\NumberFormat.cs">
+      <Link>Shared\NumberFormat.cs</Link>
+    </Compile>
+    <Compile Include="..\Shared\Protocol\ReadingFrame.cs">
+      <Link>Shared\ReadingFrame.cs</Link>
+    </Compile>
+    <Compile Include="..\Shared\Protocol\RoiDefinition.cs">
+      <Link>Shared\RoiDefinition.cs</Link>
+    </Compile>
+    <Compile Include="V2\HourCollector.cs" />
+    <Compile Include="V2\QrEncoder.cs" />
+    <Compile Include="V2\QrForm.cs">
+      <SubType>Form</SubType>
+    </Compile>
+    <Compile Include="V2\QrPayload.cs" />
+    <Compile Include="V2\RemoteAgentClient.cs" />
+    <Compile Include="V2\V2Settings.cs" />
+    <Compile Include="V2\V2StatusForm.cs">
+      <SubType>Form</SubType>
+    </Compile>
+    <Compile Include="Form1.V2.cs">
+      <DependentUpon>Form1.cs</DependentUpon>
+    </Compile>
     <Compile Include="Class1.cs" />
     <Compile Include="CoordinateCalibrationDialog.cs">
       <SubType>Form</SubType>
@@ -143,6 +176,9 @@
       <DesignTime>True</DesignTime>
     </Compile>
     <None Include="packages.config" />
+    <Content Include="winlogosheet.v2.json">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </Content>
     <None Include="Properties\Settings.settings">
       <Generator>SettingsSingleFileGenerator</Generator>
       <LastGenOutput>Settings.Designer.cs</LastGenOutput>

@@ -1,0 +1,20 @@
+{
+  "_readme": "Copy this file next to SubstationOcrAgent.exe as agent.config.json. sharedSecret must be identical on both servers and in winlogosheet.v2.json. allowedClients empty means any host may connect - put the WinLogosheet station's IP in it once the link is proven. monitorIndex selects the head showing the wall view when the server drives more than one display.",
+  "serverId": "S33",
+  "displayName": "33 kV SWITCHGEAR SLD WALL VIEW",
+  "listenAddress": "0.0.0.0",
+  "port": 5115,
+  "sharedSecret": "CHANGE-ME-same-string-on-both-servers-and-in-winlogosheet",
+  "allowedClients": [],
+  "roiConfigPath": "Config\\roi-33kv.json",
+  "tessDataPath": "C:\\Users\\DCS_User\\AppData\\Local\\Programs\\Tesseract-OCR\\tessdata",
+  "monitorIndex": 0,
+  "captureMinute": 2,
+  "autoCaptureEnabled": true,
+  "workdayStartHour": 8,
+  "dataFolder": "Data",
+  "logFolder": "Logs",
+  "retentionDays": 120,
+  "allowRoiImages": false,
+  "keepFullScreenshots": false
+}

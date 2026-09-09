@@ -1,0 +1,56 @@
+{
+  "schema": 1,
+  "serverId": "S132",
+  "displayName": "132 kV SWITCHGEAR SLD WALL VIEW",
+  "_calibration": "Rectangles measured on the 1885x941 reference capture of the 132 kV wall view. If this server runs at another resolution the agent scales them proportionally, but re-run the calibration overlay after any resolution or zoom change.",
+  "referenceWidth": 1885,
+  "referenceHeight": 941,
+  "rois": [
+    {
+      "id": "YARMJA",
+      "label": "OHL-1 OLD YARMJA",
+      "channel": "YARMJA",
+      "enabled": true,
+      "rect": {
+        "x": 676,
+        "y": 280,
+        "w": 94,
+        "h": 76
+      },
+      "rows": [
+        "KV",
+        "A",
+        "MW",
+        "MVAR"
+      ],
+      "scale": 4,
+      "invert": true,
+      "colorChannel": "green",
+      "minConfidence": 55.0,
+      "rowPadding": 1
+    },
+    {
+      "id": "QAYARA",
+      "label": "OHL-2 QAYARA",
+      "channel": "QAYARA",
+      "enabled": true,
+      "rect": {
+        "x": 928,
+        "y": 280,
+        "w": 94,
+        "h": 76
+      },
+      "rows": [
+        "KV",
+        "A",
+        "MW",
+        "MVAR"
+      ],
+      "scale": 4,
+      "invert": true,
+      "colorChannel": "green",
+      "minConfidence": 55.0,
+      "rowPadding": 1
+    }
+  ]
+}
