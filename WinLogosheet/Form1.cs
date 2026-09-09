@@ -215,11 +215,6 @@ namespace WinLogosheet
 
 
             button_new.Text = "New   يوم جديد ";
-
-            // V2: pull each hour from the OCR agents on the two SCADA servers
-            // instead of screenshotting locally. Silently stays off when
-            // winlogosheet.v2.json is absent or disabled.
-            InitializeV2();
         }
 
         // ═══════════════════════════════════════════════════════════════════
@@ -1102,7 +1097,7 @@ namespace WinLogosheet
         { foreach (char c in t) if (char.IsDigit(c)) return true; return false; }
 
         protected override void OnFormClosed(FormClosedEventArgs e)
-        { DisposeV2(); _statusTimer?.Stop(); _statusTimer?.Dispose(); base.OnFormClosed(e); }
+        { _statusTimer?.Stop(); _statusTimer?.Dispose(); base.OnFormClosed(e); }
 
         // Position lock: the app screenshots a fixed screen region behind
         // itself (_captureRegion = 50,192,50,530). Any drift of the form

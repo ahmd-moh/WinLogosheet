@@ -8,7 +8,7 @@ using System.Text;
 namespace Substation.Shared
 {
     /// <summary>
-    /// Wire format between WinLogosheet and the OCR agents.
+    /// Wire format between the 33 kV client node and the 132 kV server node.
     ///
     /// One request or response per line, UTF-8, newline terminated:
     ///
@@ -32,11 +32,11 @@ namespace Substation.Shared
 
         // Commands
         public const string CmdHello = "hello";        // identity + ROI inventory
-        public const string CmdRead = "read";          // capture (or reuse) + OCR one hour
+        public const string CmdPush = "push";          // client hands the server one hour's values
+        public const string CmdPushBatch = "push_batch"; // client drains a backlog in one round trip
+        public const string CmdRead = "read";          // ask a node for one stored hour
         public const string CmdHistory = "history";    // every stored hour of a session date
         public const string CmdStatus = "status";      // health only, no capture
-        public const string CmdCalibrate = "calibrate";// write an overlay PNG on the agent host
-        public const string CmdRoiImage = "roi_image"; // on-demand ROI crop, off by default
 
         public static readonly Encoding Wire = new UTF8Encoding(false);
 
