@@ -8,7 +8,24 @@
       "Bash(where msbuild *)",
       "Bash(where dotnet *)",
       "Bash(\"C:\\\\Program Files\\\\Microsoft Visual Studio\\\\2022\\\\Professional\\\\MSBuild\\\\Current\\\\Bin\\\\amd64\\\\MSBuild.exe\" \"D:\\\\VisualStudio\\\\CSharp\\\\WinLogosheet\\\\WinLogosheet.sln\" -t:Build -p:Configuration=Debug -nologo -v:minimal)",
-      "Bash(\"/c/Program Files/Microsoft Visual Studio/2022/Professional/MSBuild/Current/Bin/amd64/MSBuild.exe\" WinLogosheet.sln -t:Build -p:Configuration=Debug -nologo -v:minimal)"
+      "Bash(\"/c/Program Files/Microsoft Visual Studio/2022/Professional/MSBuild/Current/Bin/amd64/MSBuild.exe\" WinLogosheet.sln -t:Build -p:Configuration=Debug -nologo -v:minimal)",
+      "Bash(dir D:VisualStudioCSharpWinLogosheetWinLogosheet *)",
+      "Bash(git *)",
+      "PowerShell(dotnet build *)",
+      "PowerShell(& \"C:\\\\Program Files\\\\Microsoft Visual Studio\\\\2022\\\\Professional\\\\MSBuild\\\\Current\\\\Bin\\\\MSBuild.exe\" \"D:\\\\VisualStudio\\\\CSharp\\\\WinLogosheet\\\\WinLogosheet\\\\WinLogosheet.csproj\" /t:Build /clp:ErrorsOnly /v:m /nologo; \"ExitCode: $LASTEXITCODE\")",
+      "PowerShell(git *)",
+      "PowerShell(git push *)",
+      "Read(//c/Program Files/dotnet/**)",
+      "Read(//c/Program Files \\(x86\\)/Microsoft Visual Studio/**)",
+      "Read(//c/Program Files/Microsoft Visual Studio/**)",
+      "Bash(curl -s -I --max-time 15 https://www.nuget.org/api/v2/package/QRCoder/1.6.0)",
+      "Bash(curl -s --max-time 20 https://api.nuget.org/v3-flatcontainer/qrcoder/index.json)",
+      "PowerShell(Get-Process *)",
+      "PowerShell(\\(Get-ItemProperty \"HKCU:\\\\Software\\\\Microsoft\\\\Windows\\\\CurrentVersion\\\\Run\"\\).WinLogosheet)",
+      "PowerShell(Send-Seq *)",
+      "PowerShell(Add-Type -Namespace Win32 -Name Kbd -MemberDefinition '[DllImport\\(\"user32.dll\"\\)] public static extern void keybd_event\\(byte vk, byte scan, uint flags, UIntPtr extra\\);'; [Win32.Kbd]::keybd_event\\(0x11,0,0,[UIntPtr]::Zero\\); [Win32.Kbd]::keybd_event\\(0x10,0,0,[UIntPtr]::Zero\\); foreach \\($vk in 0x37,0x38,0x39\\) { [Win32.Kbd]::keybd_event\\($vk,0,0,[UIntPtr]::Zero\\); Start-Sleep -Milliseconds 80; [Win32.Kbd]::keybd_event\\($vk,0,2,[UIntPtr]::Zero\\); Start-Sleep -Milliseconds 200 }; [Win32.Kbd]::keybd_event\\(0x10,0,2,[UIntPtr]::Zero\\); [Win32.Kbd]::keybd_event\\(0x11,0,2,[UIntPtr]::Zero\\); Start-Sleep -Seconds 33; Get-Content \"D:\\\\VisualStudio\\\\CSharp\\\\WinLogosheet\\\\WinLogosheet\\\\bin\\\\Debug\\\\headless.log\" -Tail 6)",
+      "PowerShell(Start-Sleep -Seconds 2; Add-Type -Namespace Win32 -Name Kbd -MemberDefinition '[DllImport\\(\"user32.dll\"\\)] public static extern void keybd_event\\(byte vk, byte scan, uint flags, UIntPtr extra\\);'; [Win32.Kbd]::keybd_event\\(0x11,0,0,[UIntPtr]::Zero\\); [Win32.Kbd]::keybd_event\\(0x10,0,0,[UIntPtr]::Zero\\); foreach \\($vk in 0x37,0x38,0x39\\) { [Win32.Kbd]::keybd_event\\($vk,0,0,[UIntPtr]::Zero\\); Start-Sleep -Milliseconds 80; [Win32.Kbd]::keybd_event\\($vk,0,2,[UIntPtr]::Zero\\); Start-Sleep -Milliseconds 200 }; [Win32.Kbd]::keybd_event\\(0x10,0,2,[UIntPtr]::Zero\\); [Win32.Kbd]::keybd_event\\(0x11,0,2,[UIntPtr]::Zero\\); Start-Sleep -Seconds 10; Get-Content \"D:\\\\VisualStudio\\\\CSharp\\\\WinLogosheet\\\\WinLogosheet\\\\bin\\\\Debug\\\\headless.log\" -Tail 5)",
+      "Skill(code-review)"
     ]
   }
 }

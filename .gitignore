@@ -362,3 +362,7 @@ MigrationBackup/
 # Fody - auto-generated XML schema
 FodyWeavers.xsd
 /WinLogosheet-new.zip
+
+# Unrelated financial statements kept in the working folder
+receivables-statement_*.pdf
+receivables-statement_*.xlsx

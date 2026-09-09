@@ -45,6 +45,29 @@ namespace WinLogosheet
             1, 2, 3, 4, 5, 6, 7
         };
 
+        // Tesseract data folder, probed at runtime instead of hardcoded so the
+        // released exe works on any machine and any Windows account without
+        // admin rights: a tessdata folder shipped next to the exe wins, then
+        // the current user's per-user install, then the machine-wide installs.
+        // The old hardcoded DCS_User path stays as a last resort for the
+        // already-deployed machine.
+        private static string FindTessDataPath()
+        {
+            string[] candidates =
+            {
+                Path.Combine(Application.StartupPath, "tessdata"),
+                Path.Combine(Environment.GetFolderPath(
+                        Environment.SpecialFolder.LocalApplicationData),
+                    "Programs", "Tesseract-OCR", "tessdata"),
+                @"C:\Program Files\Tesseract-OCR\tessdata",
+                @"C:\Program Files (x86)\Tesseract-OCR\tessdata",
+                @"C:\Users\DCS_User\AppData\Local\Programs\Tesseract-OCR\tessdata",
+            };
+            foreach (string p in candidates)
+                if (Directory.Exists(p)) return p;
+            return candidates[0];
+        }
+
         private static int GetHourIndex(int hour)
         {
             for (int i = 0; i < _hourSeq.Length; i++)
@@ -171,14 +194,22 @@ namespace WinLogosheet
         // ═══════════════════════════════════════════════════════════════════
         //  CONSTRUCTOR
         // ═══════════════════════════════════════════════════════════════════
-        public Form1()
+        public Form1() : this(false) { }
+
+        // headless = true → the form is never shown: no GUI at all. Background
+        // capture/OCR keeps running and Alt+Shift+7,8,9 shows the QR on the TV.
+        public Form1(bool headless)
         {
+            _headless = headless;
             InitializeComponent();
-#if DEBUG
-            _tessDataPath = @"C:\Program Files\Tesseract-OCR\tessdata";
-#else
-            _tessDataPath = @"C:\Users\DCS_User\AppData\Local\Programs\Tesseract-OCR\tessdata";
-#endif
+            if (_headless)
+            {
+                // Must be set before the handle exists (changing it later
+                // recreates the handle and drops the registered hotkeys).
+                ShowInTaskbar = false;
+                WindowState = FormWindowState.Minimized;
+            }
+            _tessDataPath = FindTessDataPath();
             ExcelPackage.License.SetNonCommercialPersonal("My Name");
             colorDialog1.Color = Color.Gray;
             InitializeListView();
@@ -203,8 +234,11 @@ namespace WinLogosheet
             _imageFolderPath = Path.Combine(Application.StartupPath,
                 $"Screenshots-{GetSessionDate():yyyy-MM-dd}");
 
-            EnsureMissingHourPlaceholders();
-            LoadCurrentImage();
+            if (!_headless)
+            {
+                EnsureMissingHourPlaceholders(GetSessionDate());
+                LoadCurrentImage();
+            }
             SetStatus("Ready", 2000);
 
             _printEnableTimer = new System.Windows.Forms.Timer { Interval = 60_000 };
@@ -723,7 +757,7 @@ namespace WinLogosheet
         // navigation works. A blank image OCRs to nothing, so the row stays
         // empty (no false validation errors) and the operator can type the
         // readings manually, or recapture the live hour to overwrite it.
-        private void EnsureMissingHourPlaceholders()
+        private void EnsureMissingHourPlaceholders(DateTime sessionDate)
         {
             try
             {
@@ -733,7 +767,7 @@ namespace WinLogosheet
                 // still shows the "no image" panel and is captured live instead;
                 // button_next_Click allows stepping onto it despite the missing
                 // file. lastIdx < 0 means the workday's first hour is still live.
-                DateTime sessionStart = GetSessionDate().Date.AddHours(8);
+                DateTime sessionStart = sessionDate.Date.AddHours(8);
                 int elapsed = (int)Math.Floor((DateTime.Now - sessionStart).TotalHours);
                 int lastIdx = Math.Min(elapsed - 1, _hourSeq.Length - 1);
                 if (lastIdx < 0) return;
@@ -1125,6 +1159,11 @@ namespace WinLogosheet
         {
             const int WM_SYSCOMMAND = 0x0112;
             const int SC_MOVE = 0xF010;
+            if (m.Msg == WM_HOTKEY && _headless)
+            {
+                OnGlobalHotkey(m.WParam.ToInt32());
+                return;
+            }
             if (m.Msg == WM_SYSCOMMAND && (m.WParam.ToInt32() & 0xFFF0) == SC_MOVE)
                 return;
             base.WndProc(ref m);
@@ -1555,7 +1594,7 @@ namespace WinLogosheet
                 $" - {sessionDate.ToString("dddd", ar)}";
             _imageFolderPath = Path.Combine(Application.StartupPath,
                 $"Screenshots-{sessionDate:yyyy-MM-dd}");
-            EnsureMissingHourPlaceholders();
+            EnsureMissingHourPlaceholders(sessionDate);
             LoadCurrentImage();
         }
 
@@ -1578,7 +1617,7 @@ namespace WinLogosheet
             }
         }
 
-        private void CreateHourlyTask()
+        private void CreateHourlyTask(bool silent = false)
         {
             try
             {
@@ -1601,10 +1640,17 @@ namespace WinLogosheet
                     td.Settings.DeleteExpiredTaskAfter = TimeSpan.FromMinutes(5);
                     td.Actions.Add(new ExecAction("wscript.exe", $"\"{vbs}\"", null));
                     ts.RootFolder.RegisterTaskDefinition(name, td);
-                    MessageBox.Show($"Task created.\nStarts: {start}\nExpires: {exp}");
+                    if (silent)
+                        HeadlessLog($"Capture task created. Starts: {start}  Expires: {exp}");
+                    else
+                        MessageBox.Show($"Task created.\nStarts: {start}\nExpires: {exp}");
                 }
             }
-            catch (Exception ex) { MessageBox.Show("Error: " + ex.Message); }
+            catch (Exception ex)
+            {
+                if (silent) HeadlessLog("Capture task error: " + ex.Message);
+                else MessageBox.Show("Error: " + ex.Message);
+            }
         }
 
         private void button_Start_Click(object sender, EventArgs e)
@@ -1656,6 +1702,308 @@ namespace WinLogosheet
                 MessageBox.Show($"Could not delete:\n{ex.Message}", "Delete Error",
                 MessageBoxButtons.OK, MessageBoxIcon.Error);
             }
+        }
+
+        // ═══════════════════════════════════════════════════════════════════
+        //  HEADLESS MODE  (no GUI at all)
+        //  The form is created but NEVER shown. It acts purely as the engine:
+        //  – silently keeps the hourly capture scheduled task alive
+        //  – watches the Screenshots-<workday> folder and OCRs new captures
+        //  – rolls the session over automatically at 8 AM (no "New" click)
+        //  – global hotkey sequence Ctrl+Shift+7 → 8 → 9 (modifiers held)
+        //    toggles a fullscreen QR code on the SECOND screen (TV);
+        //    Esc, a click or an auto-timeout (QrTvForm.AutoHideMs) hides it.
+        //    Ctrl (not Alt) on purpose: Alt+Shift is the input-language
+        //    toggle on Arabic systems.
+        //  Nothing else is ever displayed — no dialogs, no taskbar entry.
+        //  Diagnostics go to headless.log next to the exe.
+        // ═══════════════════════════════════════════════════════════════════
+        private readonly bool _headless;
+        private bool _headlessStarted;
+        private DateTime _sessionDateHeadless;
+        private System.Windows.Forms.Timer _scanTimer;
+        private readonly Dictionary<int, DateTime> _ocrStamp = new Dictionary<int, DateTime>();
+        private QrTvForm _tvForm;
+        private int _hkStage;
+        private DateTime _hkLast;
+
+        [DllImport("user32.dll")]
+        private static extern bool RegisterHotKey(IntPtr hWnd, int id, uint fsModifiers, uint vk);
+
+        [DllImport("user32.dll")]
+        private static extern bool UnregisterHotKey(IntPtr hWnd, int id);
+
+        private const uint MOD_CONTROL = 0x0002, MOD_SHIFT = 0x0004, MOD_NOREPEAT = 0x4000;
+        private const int WM_HOTKEY = 0x0312;
+        private const int HK_ID_BASE = 0x4C00;   // 'L' — hotkey ids = base + vk
+        // Top-row 7/8/9 and numpad 7/8/9 both trigger the sequence.
+        private static readonly uint[] _hkVks = { 0x37, 0x38, 0x39, 0x67, 0x68, 0x69 };
+
+        // The engine form must never become visible in headless mode, no
+        // matter who calls Show()/set_Visible.
+        protected override void SetVisibleCore(bool value)
+            => base.SetVisibleCore(!_headless && value);
+
+        protected override void OnHandleCreated(EventArgs e)
+        {
+            base.OnHandleCreated(e);
+            if (!_headless) return;
+            RegisterQrHotkeys();                 // re-register on handle recreation
+            if (!_headlessStarted)
+            {
+                _headlessStarted = true;
+                InitializeHeadless();
+            }
+        }
+
+        protected override void OnHandleDestroyed(EventArgs e)
+        {
+            if (_headless) UnregisterQrHotkeys();
+            base.OnHandleDestroyed(e);
+        }
+
+        private void RegisterQrHotkeys()
+        {
+            foreach (uint vk in _hkVks)
+                if (!RegisterHotKey(Handle, HK_ID_BASE + (int)vk,
+                        MOD_CONTROL | MOD_SHIFT | MOD_NOREPEAT, vk))
+                    HeadlessLog($"RegisterHotKey failed for vk 0x{vk:X2} " +
+                                "(another program may own Ctrl+Shift+that key)");
+        }
+
+        private void UnregisterQrHotkeys()
+        {
+            foreach (uint vk in _hkVks)
+                UnregisterHotKey(Handle, HK_ID_BASE + (int)vk);
+        }
+
+        // Self-registering logon autostart: an HKCU Run entry points at this
+        // exe so the hotkeys survive a reboot. Per-user key — no admin needed,
+        // and it runs in the interactive session (required for RegisterHotKey
+        // and the TV form). Re-checked every start so a rebuilt or moved exe
+        // heals the entry automatically.
+        private void EnsureRunAtLogon()
+        {
+            try
+            {
+                string exe = $"\"{Application.ExecutablePath}\"";
+                using (var run = Microsoft.Win32.Registry.CurrentUser.CreateSubKey(
+                           @"Software\Microsoft\Windows\CurrentVersion\Run"))
+                {
+                    if ((run.GetValue("WinLogosheet") as string) != exe)
+                    {
+                        run.SetValue("WinLogosheet", exe);
+                        HeadlessLog($"Autostart registered: {exe}");
+                    }
+                }
+            }
+            catch (Exception ex) { HeadlessLog("Autostart error: " + ex.Message); }
+        }
+
+        private void InitializeHeadless()
+        {
+            HeadlessLog("── Headless start ──");
+            HeadlessLog("tessdata: " + _tessDataPath);
+            EnsureRunAtLogon();
+            try
+            {
+                if (TaskNeedsUpdate()) CreateHourlyTask(silent: true);
+            }
+            catch (Exception ex) { HeadlessLog("Task check error: " + ex.Message); }
+
+            ResetHeadlessSession(WorkdayDate(DateTime.Now));
+
+            _scanTimer = new System.Windows.Forms.Timer { Interval = 1000 };
+            _scanTimer.Tick += (s, e) => ScanTick();
+            _scanTimer.Start();
+        }
+
+        // The workday a wall-clock moment belongs to: 8 AM today → 7:59 AM
+        // tomorrow. Matches exactly where screencap-SET2.ps1 writes its PNGs.
+        private static DateTime WorkdayDate(DateTime now)
+            => now.Hour >= 8 ? now.Date : now.Date.AddDays(-1);
+
+        private void ResetHeadlessSession(DateTime workday)
+        {
+            _sessionDateHeadless = workday;
+            _imageFolderPath = Path.Combine(Application.StartupPath,
+                $"Screenshots-{workday:yyyy-MM-dd}");
+            _hourData.Clear();
+            _skippedHours.Clear();
+            _ocrStamp.Clear();
+            listView1.Items.Clear();
+            _currentHour = GetCuurentHour();
+            EnsureMissingHourPlaceholders(workday);
+            HeadlessLog($"Session {workday:yyyy-MM-dd}  folder: {_imageFolderPath}");
+            CleanupOldScreenshotFolders(workday);
+        }
+
+        // Disk housekeeping: Screenshots-<date> folders older than three
+        // workdays are removed entirely (folder + images). Runs at startup
+        // and at every 8 AM rollover, so with the current workday there are
+        // never more than four folders on disk. Non-date folder names are
+        // left alone, and one locked folder never aborts the rest.
+        private void CleanupOldScreenshotFolders(DateTime currentWorkday)
+        {
+            try
+            {
+                DateTime cutoff = currentWorkday.AddDays(-3);
+                foreach (string dir in Directory.GetDirectories(
+                             Application.StartupPath, "Screenshots-*"))
+                {
+                    string name = Path.GetFileName(dir);
+                    if (!DateTime.TryParseExact(
+                            name.Substring("Screenshots-".Length), "yyyy-MM-dd",
+                            CultureInfo.InvariantCulture, DateTimeStyles.None,
+                            out DateTime folderDate)) continue;
+                    if (folderDate >= cutoff) continue;
+                    try
+                    {
+                        Directory.Delete(dir, recursive: true);
+                        HeadlessLog($"Cleanup: deleted {name} (>3 days old)");
+                    }
+                    catch (Exception ex)
+                    {
+                        HeadlessLog($"Cleanup: could not delete {name}: {ex.Message}");
+                    }
+                }
+            }
+            catch (Exception ex) { HeadlessLog("Cleanup error: " + ex.Message); }
+        }
+
+        private void ScanTick()
+        {
+            try
+            {
+                // 8 AM boundary: start a fresh workday without any user action.
+                DateTime expected = WorkdayDate(DateTime.Now);
+                if (expected != _sessionDateHeadless)
+                {
+                    try
+                    {
+                        if (TaskNeedsUpdate()) CreateHourlyTask(silent: true);
+                    }
+                    catch (Exception ex) { HeadlessLog("Task check error: " + ex.Message); }
+                    ResetHeadlessSession(expected);
+                }
+
+                // Cheap re-check every tick: an hour that just slipped into the
+                // past without a capture (e.g. app started at 08:59) still gets
+                // its blank placeholder row.
+                EnsureMissingHourPlaceholders(_sessionDateHeadless);
+
+                bool more = ProcessNextCapture();
+                _scanTimer.Interval = more ? 1500 : 30000;
+            }
+            catch (Exception ex)
+            {
+                HeadlessLog("Scan error: " + ex.Message);
+                _scanTimer.Interval = 30000;
+            }
+        }
+
+        // OCR at most ONE new or changed capture per call so the hidden
+        // message loop is never blocked longer than a single OCR run.
+        // Returns true when a file was processed (more may be pending).
+        private bool ProcessNextCapture()
+        {
+            foreach (int h in _hourSeq)
+            {
+                string path = Path.Combine(_imageFolderPath, $"{h:00}.png");
+                if (!File.Exists(path)) continue;
+
+                DateTime stamp = File.GetLastWriteTimeUtc(path);
+                // Skip files the capture script may still be writing.
+                if ((DateTime.UtcNow - stamp).TotalSeconds < 5) continue;
+                if (_ocrStamp.TryGetValue(h, out DateTime seen) && seen == stamp) continue;
+
+                _ocrStamp[h] = stamp;
+                _isUpdatingFromListView = true;
+                try
+                {
+                    _hourData[h] = RunOcr(path);
+                    UpdateListView();
+                }
+                finally { _isUpdatingFromListView = false; }
+                HeadlessLog($"OCR hour {h:00} ({_hourData[h].Length} value(s))");
+                return true;
+            }
+            return false;
+        }
+
+        // Hotkey sequence: 7 arms, 8 confirms, 9 fires — each press within 3 s
+        // of the previous one, all with Ctrl+Shift held. 7 always restarts the
+        // sequence; anything out of order resets it.
+        private void OnGlobalHotkey(int id)
+        {
+            int vk = id - HK_ID_BASE;
+            int digit = vk >= 0x60 ? vk - 0x60 : vk - 0x30;
+
+            bool timely = (DateTime.UtcNow - _hkLast).TotalSeconds <= 3;
+            _hkLast = DateTime.UtcNow;
+
+            int before = _hkStage;
+            if (digit == 7) _hkStage = 1;
+            else if (digit == 8 && before == 1 && timely) _hkStage = 2;
+            else if (digit == 9 && before == 2 && timely) _hkStage = 3;
+            else _hkStage = 0;
+
+            string note = "";
+            if (_hkStage == 0)
+                note = before > 0 && !timely ? "  (too slow, >3 s — restart from 7)"
+                                             : "  (out of order — restart from 7)";
+            HeadlessLog($"Hotkey Ctrl+Shift+{digit}  stage {before}→{_hkStage}{note}");
+
+            if (_hkStage == 3) { _hkStage = 0; ToggleTvQr(); }
+        }
+
+        private void ToggleTvQr()
+        {
+            if (_tvForm != null && !_tvForm.IsDisposed)
+            {
+                _tvForm.HideReason = "hotkey";
+                _tvForm.Close();
+                _tvForm = null;
+                return;
+            }
+
+            try
+            {
+                // Bring the grid fully up to date before building the payload.
+                int guard = 0;
+                while (ProcessNextCapture() && ++guard < 32) { }
+
+                string payload = LogsheetQr.BuildPayload(listView1, _sessionDateHeadless);
+                Bitmap qr = LogsheetQr.Generate(payload, 8, out string ecc);
+
+                _tvForm = new QrTvForm(qr);
+                _tvForm.FormClosed += (s, e) =>
+                {
+                    _tvForm = null;
+                    HeadlessLog($"QR hidden ({((QrTvForm)s).HideReason})");
+                };
+                _tvForm.Show();
+                _tvForm.Activate();
+                HeadlessLog($"QR displayed ({payload.Length} chars, ECC {ecc})");
+            }
+            catch (Exception ex)
+            {
+                HeadlessLog("QR error: " + ex.Message);
+            }
+        }
+
+        private static readonly object _logLock = new object();
+
+        private void HeadlessLog(string msg)
+        {
+            try
+            {
+                lock (_logLock)
+                    File.AppendAllText(
+                        Path.Combine(Application.StartupPath, "headless.log"),
+                        $"{DateTime.Now:yyyy-MM-dd HH:mm:ss}  {msg}\r\n");
+            }
+            catch { }
         }
     }
 }
