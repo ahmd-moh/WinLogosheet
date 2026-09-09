@@ -34,6 +34,8 @@ warning at start-up saying so.
    - `allowedClients` — leave `[]` until the link is proven, then set it to
      `["<the 33 kV server's IP>"]`.
    - `qrSeconds` — 3 to 5.
+   - `qrScreen` — `"primary"` (the operator's own screen, the default),
+     `"secondary"`, or a screen index.
 4. Open **TCP 5115 inbound** in Windows Firewall for this program.
 
 ## 4. Install on the 33 kV server
@@ -95,16 +97,20 @@ That is the whole daily routine. From then on:
 
 ### Reading the day
 
-On the **132 kV server**, hold **Ctrl** and **Shift**, then press **7**, **8**,
-**9**. The QR code appears on the main screen for 3–5 seconds, then hides. Scan
-it with the Android app. Click it or press any key to dismiss it early.
+On the **132 kV server**, hold **Ctrl+Shift** and press **7**, then **8**, then
+**9** — each press within three seconds of the last. The QR code fills the main
+screen for 3–5 seconds, then hides. Scan it with the Android app.
+
+The same sequence while the code is up takes it down. So do **Esc** and a click.
+Both the top-row and numpad 7/8/9 work.
 
 You can do this at any point during the session, not only at the end — the code
-carries everything gathered so far, and the caption under it says how many hours
+carries everything gathered so far, and the caption above it says how many hours
 that is.
 
-If the day needs more than one code, they are shown one after another, each for
-the same few seconds, labelled "part 1 of 2" and so on. Scan them in one pass.
+It is always a **single** code: the payload is the `LS1` format the companion app
+already parses, and that app has no notion of multi-part codes. If a session
+ever will not fit at error correction M the node drops to L automatically.
 
 ### Starting a session automatically
 
@@ -128,11 +134,14 @@ Everything goes to `Logs\node-YYYY-MM-DD.log` on each node.
 | Server log: "Refused connection … not in allowedClients" | add the 33 kV server's IP |
 | Server log: "Discarded a frame … claiming to be this node" | both configs have the same `nodeId` |
 | Values read but wrong | ROI boxes are off — go back to step 5 |
-| Ctrl+Shift+7+8+9 does nothing | check the log for "Hotkey armed"; if it says "Hotkey not available", another program holds a conflicting hook. Try the sequence form: hold Ctrl+Shift, then press 7, 8, 9 one after another |
+| Ctrl+Shift+7,8,9 does nothing | the log records every press as `Hotkey Ctrl+Shift+N stage X to Y`. No line at all means the registration failed — look for `RegisterHotKey failed`, which means another program owns that combination. A line that resets to stage 0 means the presses were out of order or more than three seconds apart |
 | QR says nothing gathered | no hour has been read yet for the current session |
 
 The hotkey needs the 132 kV node running. After 07:00 it is idle but still
 listening, so the code can still be shown — unless `exitWhenSessionEnds` is set.
+
+**The Android app needs one line changed** for the 07:00 day, or the 07:00 row
+renders at the bottom of its grid. See [QR-ANDROID.md](QR-ANDROID.md#hour-order).
 
 ## 8. Housekeeping
 

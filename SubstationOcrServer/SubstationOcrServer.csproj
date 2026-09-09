@@ -98,12 +98,12 @@
     <Compile Include="..\Shared\Qr\QrEncoder.cs">
       <Link>Shared\QrEncoder.cs</Link>
     </Compile>
-    <Compile Include="..\Shared\Qr\QrPayload.cs">
-      <Link>Shared\QrPayload.cs</Link>
+    <Compile Include="..\Shared\Qr\LogsheetQr.cs">
+      <Link>Shared\LogsheetQr.cs</Link>
     </Compile>
   </ItemGroup>
   <ItemGroup>
-    <Compile Include="HotkeyListener.cs" />
+    <Compile Include="HotkeySink.cs" />
     <Compile Include="MergedStore.cs" />
     <Compile Include="Program.cs" />
     <Compile Include="QrFlashWindow.cs" />

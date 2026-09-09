@@ -97,33 +97,12 @@ namespace SubstationOcrServer
                 return;
             }
 
-            var flash = new QrFlashWindow();
-
-            // The hook fires on a pool thread; the window must be touched on the
-            // UI thread, so bounce through its handle.
-            var hotkey = new HotkeyListener();
-            hotkey.Triggered += () =>
-            {
-                try
-                {
-                    if (!flash.IsHandleCreated) return;
-                    flash.BeginInvoke((Action)(() => ShowQr(config, merged, scheduler, flash, log)));
-                }
-                catch (Exception ex)
-                {
-                    log.Error("QR display failed: " + ex.Message);
-                }
-            };
-
-            try
-            {
-                hotkey.Start();
-                log.Info("Hotkey armed: hold Ctrl+Shift and press 7, 8, 9 to show the QR code.");
-            }
-            catch (Exception ex)
-            {
-                log.Error("Hotkey not available: " + ex.Message + " — the QR code cannot be shown.");
-            }
+            // WM_HOTKEY needs a window to be delivered to; this one is created
+            // but never shown. Registering happens on handle creation, so the
+            // hotkeys survive Windows recreating the handle.
+            var hotkey = new HotkeySink();
+            hotkey.Trace += log.Info;
+            hotkey.Completed += () => ToggleQr(config, merged, scheduler, log);
 
             scheduler.ReadingTaken += frame => merged.Accept(frame);
             scheduler.SessionEnded += () =>
@@ -138,7 +117,7 @@ namespace SubstationOcrServer
             host.BuildingMenu += menu =>
             {
                 menu.Items.Add("Show QR code now", null,
-                    (s, e) => ShowQr(config, merged, scheduler, flash, log));
+                    (s, e) => ToggleQr(config, merged, scheduler, log));
                 menu.Items.Add("Read this hour now", null, (s, e) => scheduler.CaptureNow());
                 menu.Items.Add("Write calibration overlay", null, (s, e) =>
                 {
@@ -151,77 +130,109 @@ namespace SubstationOcrServer
             Application.ApplicationExit += (s, e) =>
             {
                 log.Info("Shutting down.");
+                HideQr("shutdown", log);
                 hotkey.Dispose();
                 scheduler.Dispose();
                 server.Dispose();
                 capture.Dispose();
-                flash.Dispose();
             };
 
-            // Force the handle now — CreateControl is a no-op while a form is
-            // hidden, and the hotkey needs a handle to marshal onto from the very
-            // first press, without the window ever being shown.
-            IntPtr handle = flash.Handle;
-            log.Info("QR window ready (handle " + handle.ToInt64().ToString("X") + ").");
+            // Force the handle so the hotkeys register now, without the sink
+            // ever being shown.
+            IntPtr handle = hotkey.Handle;
+            log.Info("Hotkey armed on handle " + handle.ToInt64().ToString("X") +
+                     ": hold Ctrl+Shift, then press 7, 8, 9 within three seconds each.");
+            log.Info("QR will be shown on the " + config.QrScreen + " screen for " +
+                     config.QrSeconds + " s.");
 
             host.Start();
             Application.Run(host);
         }
 
-        /// <summary>Builds the payload for the pinned session and flashes it.</summary>
-        private static void ShowQr(ServerConfig config, MergedStore merged, HourlyScheduler scheduler,
-                                   QrFlashWindow flash, NodeLog log)
+        private static QrFlashWindow _flash;
+        private static readonly object _flashGate = new object();
+
+        /// <summary>
+        /// Hotkey behaviour: showing again while the code is up takes it down,
+        /// the way the previous version worked.
+        /// </summary>
+        private static void ToggleQr(ServerConfig config, MergedStore merged,
+                                     HourlyScheduler scheduler, NodeLog log)
         {
-            try
+            lock (_flashGate)
             {
-                string sessionDate = scheduler.SessionDateString;
-
-                int hoursHeld;
-                Dictionary<int, string[]> rows = merged.BuildRows(sessionDate, out hoursHeld);
-
-                var options = new QrOptions
+                if (_flash != null && !_flash.IsDisposed)
                 {
-                    SubstationCode = config.SubstationCode,
-                    Format = config.QrFormat,
-                    Ecc = config.QrEcc,
-                    UrlTemplate = config.QrUrlTemplate
-                };
-
-                var builder = new QrPayloadBuilder(options);
-                QrEcc ecc = builder.Ecc;
-                List<string> payloads = builder.Build(sessionDate, SessionClock.Sequence, rows, ecc);
-
-                if (payloads.Count == 0 || hoursHeld == 0)
-                {
-                    log.Warn("QR requested but nothing has been gathered yet for " + sessionDate + ".");
+                    HideQr("hotkey", log);
                     return;
                 }
 
-                int expected = SessionClock.ExpectedReadings(scheduler.SessionDate, DateTime.Now,
-                                                             config.CaptureMinute);
+                ShowQr(config, merged, scheduler, log);
+            }
+        }
 
-                var pages = new List<Image>();
-                var captions = new List<string>();
+        private static void HideQr(string reason, NodeLog log)
+        {
+            QrFlashWindow window = _flash;
+            if (window == null || window.IsDisposed) { _flash = null; return; }
 
-                for (int i = 0; i < payloads.Count; i++)
+            _flash = null;
+            try
+            {
+                window.HideReason = reason;
+                window.Close();
+            }
+            catch (Exception ex)
+            {
+                log.Warn("Could not close the QR window: " + ex.Message);
+            }
+        }
+
+        /// <summary>Builds the LS1 payload for the pinned session and shows it.</summary>
+        private static void ShowQr(ServerConfig config, MergedStore merged,
+                                   HourlyScheduler scheduler, NodeLog log)
+        {
+            try
+            {
+                DateTime sessionDate = scheduler.SessionDate;
+
+                int hoursHeld;
+                Dictionary<int, string[]> rows = merged.BuildRows(scheduler.SessionDateString, out hoursHeld);
+
+                if (hoursHeld == 0)
                 {
-                    QrCode code = QrCode.Encode(payloads[i], ecc);
-
-                    Rectangle screen = Screen.PrimaryScreen.WorkingArea;
-                    int box = (int)(Math.Min(screen.Width, screen.Height) * 0.78);
-                    pages.Add(code.ToBitmap(code.ModuleSizeFor(box)));
-
-                    captions.Add(payloads.Count > 1
-                        ? string.Format(CultureInfo.InvariantCulture, "{0}   {1}   —   part {2} of {3}",
-                                        config.SubstationCode, sessionDate, i + 1, payloads.Count)
-                        : config.SubstationCode + "   " + sessionDate);
+                    log.Warn("QR requested but nothing has been gathered yet for " +
+                             scheduler.SessionDateString + ".");
+                    return;
                 }
 
-                string footer = QrFlashWindow.DescribeCoverage(hoursHeld, Math.Max(hoursHeld, expected));
-                flash.Flash(pages.ToArray(), captions.ToArray(), footer, config.QrSeconds);
+                string payload = LogsheetQr.BuildPayload(sessionDate, SessionClock.Sequence, rows);
 
-                log.Info("QR shown: " + hoursHeld + " hour(s), " + payloads.Count + " code(s), " +
-                         config.QrSeconds + " s each.");
+                QrEcc ecc;
+                QrCode code = LogsheetQr.Encode(payload, out ecc);
+
+                // Render one module per pixel and let the window scale it up by a
+                // whole factor, which keeps every module square and crisp.
+                Bitmap bitmap = code.ToBitmap(1, 4);
+
+                string caption = string.Format(CultureInfo.InvariantCulture, "{0}   {1}   —   {2} hour(s)",
+                    config.SubstationCode, scheduler.SessionDateString, hoursHeld);
+
+                var window = new QrFlashWindow(bitmap, caption, config.QrSeconds, config.QrScreen);
+                window.FormClosed += (s, e) =>
+                {
+                    var closed = (QrFlashWindow)s;
+                    lock (_flashGate) if (ReferenceEquals(_flash, closed)) _flash = null;
+                    log.Info("QR hidden (" + closed.HideReason + ").");
+                };
+
+                _flash = window;
+                window.Show();
+                window.Activate();
+
+                log.Info(string.Format(CultureInfo.InvariantCulture,
+                    "QR shown: {0} hour(s), {1} chars, {2} mode, version {3}, ECC {4}.",
+                    hoursHeld, payload.Length, code.Mode, code.Version, ecc));
             }
             catch (Exception ex)
             {

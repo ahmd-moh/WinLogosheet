@@ -32,8 +32,8 @@ The system gathers values and hands them to a phone as a QR code.
 | Socket role | client — connects out and pushes | server — listens on TCP 5115 |
 | Screen read | its own **secondary** screen | its own **secondary** screen |
 | Holds the session | its own hours only | **both** nodes' hours |
-| QR display | — | flashes on the **main** screen |
-| Hotkey | — | Ctrl+Shift+7+8+9 |
+| QR display | — | full screen on the **main** screen |
+| Hotkey | — | Ctrl+Shift+7 → 8 → 9 |
 
 Both are the same underneath: the capture, OCR and storage code lives in
 `Shared/` and is compiled into each. Only the socket role, the QR display and
@@ -159,22 +159,41 @@ delivers the whole night.
 
 ## The QR handoff
 
-Hold **Ctrl** and **Shift**, then press **7**, **8**, **9**. The 132 kV node
-builds the payload from everything gathered so far and flashes it on the main
-screen for `qrSeconds` (3–5, default 5), then hides it. A click or any key
-dismisses it early.
+Hold **Ctrl+Shift**, then press **7**, **8**, **9** — each within three seconds
+of the last. The 132 kV node builds the payload from everything gathered so far
+and shows it full screen for `qrSeconds` (3–5, default 5). The same sequence
+takes it down again; so do Esc and a click.
 
-Windows can only register modifiers plus *one* key as a hotkey, so this uses a
-low-level keyboard hook instead, tracking which keys are down. It accepts the
-combination two ways, because three simultaneous digits ghost on many keyboards:
+The payload is **`LS1`**, the format the existing Android companion app already
+parses, taken unchanged from the PreV2 branch:
 
-- all three digits held together while Ctrl+Shift are held, **or**
-- 7 then 8 then 9 in order while Ctrl+Shift stay held.
+```
+LS1 <YYYYMMDD>*[-]HH:c1.c2. ... .c24*[-]HH:...
+```
 
-The hook never swallows the keystroke — on a live SCADA desktop, a hook that
-eats input would be far worse than a missed QR code.
+Every character stays inside the QR alphanumeric table, which keeps the symbol
+in alphanumeric mode — two characters per 11 bits instead of eight bits each. A
+full 24-hour session is version 33 at ECC M that way, against version 40 in byte
+mode. Error correction is M, stepping down to L only if the session will not
+fit. There is no splitting across codes: the app parses one payload.
 
-Payload format is in [QR-ANDROID.md](QR-ANDROID.md).
+Full contract, and the one line the phone needs changed for the 07:00 day, in
+[QR-ANDROID.md](QR-ANDROID.md).
+
+### The hotkey
+
+`RegisterHotKey` binds modifiers plus exactly one key, so the combination is
+registered as three separate hotkeys — Ctrl+Shift+7, +8, +9, on both the top row
+and the numpad — and turned into a sequence: 7 arms, 8 confirms, 9 fires. Out of
+order, or more than three seconds apart, resets it.
+
+This is the PreV2 mechanism kept as-is. A low-level keyboard hook would also
+work, but it sits in the input path of the entire SCADA desktop; this does not.
+Ctrl rather than Alt on purpose — Alt+Shift is the input-language toggle on
+Arabic systems.
+
+The registrations are owned by a window that is created but never shown, and
+re-registered if Windows ever recreates its handle.
 
 ## Files
 
@@ -197,15 +216,15 @@ Shared/Capture/      capture and OCR, compiled into both nodes
   NodeLog.cs         day-stamped log file
   HiddenHost.cs      windowless host, optional tray icon
 Shared/Qr/
-  QrEncoder.cs       self-contained QR encoder
-  QrPayload.cs       the payload the phone scans
+  QrEncoder.cs       self-contained QR encoder, byte and alphanumeric modes
+  LogsheetQr.cs      the LS1 payload the phone scans
 
 SubstationOcrServer/   132 kV
   Program.cs           start-up and QR assembly
   ServerConfig.cs      server.config.json
   ReadingServer.cs     TCP listener, accepts pushes
   MergedStore.cs       both nodes' hours → 24-column rows
-  HotkeyListener.cs    Ctrl+Shift+7+8+9
+  HotkeySink.cs        Ctrl+Shift+7 → 8 → 9, via RegisterHotKey
   QrFlashWindow.cs     the only thing ever shown on the main screen
 
 SubstationOcrClient/   33 kV

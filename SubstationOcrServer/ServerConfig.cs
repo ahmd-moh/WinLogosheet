@@ -17,14 +17,17 @@ namespace SubstationOcrServer
         /// <summary>Hosts allowed to connect. Empty means any host may.</summary>
         public List<string> AllowedClients = new List<string>();
 
-        /// <summary>How long each QR code stays on the main screen. The brief
-        /// clamps this to 3-5 seconds.</summary>
+        /// <summary>How long the QR code stays up. Clamped to 3-5 seconds.</summary>
         public int QrSeconds = 5;
 
+        /// <summary>Which display shows the code: "primary" (the operator's own
+        /// screen, and the default), "secondary", or a screen index.</summary>
+        public string QrScreen = "primary";
+
+        /// <summary>Stamped into nothing today — the LS1 payload the companion
+        /// app parses carries no substation field — but it labels the window so
+        /// an operator can tell two substations apart at a glance.</summary>
         public string SubstationCode = "MSL-E";
-        public string QrFormat = "v2json";
-        public string QrEcc = "L";
-        public string QrUrlTemplate = "";
 
         /// <summary>Channel-to-column bindings for the QR payload.</summary>
         public ColumnMap Columns = ColumnMap.Default();
@@ -57,11 +60,7 @@ namespace SubstationOcrServer
 
             // 3 to 5 seconds on screen, as specified.
             config.QrSeconds = Math.Max(3, Math.Min(5, Json.Int(root, "qrSeconds", config.QrSeconds)));
-
-            var qr = Json.Dict(root, "qr");
-            config.QrFormat = Json.Str(qr, "format", config.QrFormat);
-            config.QrEcc = Json.Str(qr, "ecc", config.QrEcc);
-            config.QrUrlTemplate = Json.Str(qr, "urlTemplate", config.QrUrlTemplate);
+            config.QrScreen = Json.Str(root, "qrScreen", config.QrScreen);
 
             config.Columns = ColumnMap.FromJson(Json.List(root, "columns"));
             return config;
@@ -72,9 +71,9 @@ namespace SubstationOcrServer
             var root = new Dictionary<string, object>
             {
                 { "_readme", "132 kV SERVER node. It reads its own secondary screen every hour, " +
-                             "receives the 33 kV client's values over TCP, and flashes the QR code " +
-                             "on the main screen on Ctrl+Shift+7+8+9. sharedSecret must match the " +
-                             "client's." }
+                             "receives the 33 kV client's values over TCP, and shows the LS1 QR " +
+                             "code on the main screen when the operator presses Ctrl+Shift+7, 8, 9. " +
+                             "sharedSecret must match the client's." }
             };
             WriteCommon(root);
 
@@ -83,12 +82,7 @@ namespace SubstationOcrServer
             root["allowedClients"] = AllowedClients;
             root["substationCode"] = SubstationCode;
             root["qrSeconds"] = QrSeconds;
-            root["qr"] = new Dictionary<string, object>
-            {
-                { "format", QrFormat },
-                { "ecc", QrEcc },
-                { "urlTemplate", QrUrlTemplate }
-            };
+            root["qrScreen"] = QrScreen;
             root["columns"] = Columns.ToJson();
 
             Json.WriteFile(path, root);

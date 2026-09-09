@@ -6,6 +6,19 @@ using System.Text;
 
 namespace Substation.Qr
 {
+    /// <summary>
+    /// The two encodings this project needs. Alphanumeric packs two characters
+    /// into 11 bits instead of 8 bits each, so a payload built from the QR
+    /// alphanumeric table alone fits in a markedly smaller symbol — a full
+    /// 24-hour logsheet lands around version 30 instead of 37 at level M, which
+    /// is the difference between an easy phone scan and a fiddly one.
+    /// </summary>
+    public enum QrMode
+    {
+        Alphanumeric = 2,
+        Byte = 4
+    }
+
     public enum QrEcc
     {
         Low = 0,      // ~7% recovery
@@ -29,7 +42,21 @@ namespace Substation.Qr
         public int Version { get; private set; }
         public int Size { get; private set; }
         public QrEcc Ecc { get; private set; }
+        public QrMode Mode { get; private set; }
         public int Mask { get; private set; }
+
+        /// <summary>The QR alphanumeric table, in code-point order.</summary>
+        public const string AlphanumericTable = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ $%*+-./:";
+
+        /// <summary>True when every character can be carried in alphanumeric mode.</summary>
+        public static bool IsAlphanumeric(string text)
+        {
+            if (string.IsNullOrEmpty(text)) return true;
+
+            foreach (char c in text)
+                if (AlphanumericTable.IndexOf(c) < 0) return false;
+            return true;
+        }
 
         private readonly bool[][] _modules;
         private readonly bool[][] _isFunction;
@@ -43,57 +70,75 @@ namespace Substation.Qr
         // ── Public entry point ─────────────────────────────────────────────
 
         /// <summary>
-        /// Encodes text as UTF-8 in byte mode, choosing the smallest version
-        /// that fits and the mask with the lowest penalty score.
+        /// Encodes text, choosing alphanumeric mode when every character allows
+        /// it and byte mode otherwise, then the smallest version that fits and
+        /// the mask with the lowest penalty score.
         /// </summary>
         public static QrCode Encode(string text, QrEcc ecc)
         {
             if (text == null) throw new ArgumentNullException("text");
-            return Encode(new UTF8Encoding(false).GetBytes(text), ecc);
+            return Encode(text, ecc, IsAlphanumeric(text) ? QrMode.Alphanumeric : QrMode.Byte);
         }
 
-        public static QrCode Encode(byte[] data, QrEcc ecc)
+        public static QrCode Encode(string text, QrEcc ecc, QrMode mode)
         {
-            if (data == null) throw new ArgumentNullException("data");
+            if (text == null) throw new ArgumentNullException("text");
+
+            if (mode == QrMode.Alphanumeric && !IsAlphanumeric(text))
+                throw new ArgumentException("The payload contains characters outside the QR " +
+                                            "alphanumeric table; it must be encoded in byte mode.");
+
+            byte[] bytes = mode == QrMode.Byte ? new UTF8Encoding(false).GetBytes(text) : null;
+            int count = mode == QrMode.Byte ? bytes.Length : text.Length;
 
             int ecl = (int)ecc;
-            int version = ChooseVersion(data.Length, ecl);
+            int version = ChooseVersion(count, ecl, mode);
             if (version < 0)
                 throw new ArgumentException(
-                    "The payload is " + data.Length + " bytes; a QR code holds at most " +
-                    MaxBytes(ecl) + " at this error-correction level. " +
-                    "Split the day into fewer hours per code, or lower the level.");
+                    "The payload is " + count + (mode == QrMode.Byte ? " bytes" : " characters") +
+                    "; a QR code holds at most " + MaxUnits(ecl, mode) +
+                    " at this error-correction level. Lower the level, or send fewer hours.");
 
-            byte[] codewords = BuildCodewords(data, version, ecl);
+            byte[] codewords = BuildCodewords(text, bytes, version, ecl, mode);
             byte[] interleaved = AddEccAndInterleave(codewords, version, ecl);
-            return new QrCode(version, ecc, interleaved);
+            return new QrCode(version, ecc, mode, interleaved);
         }
 
-        /// <summary>Largest byte-mode payload at this level, for error messages
-        /// and for deciding when to split a day across several codes.</summary>
-        public static int MaxBytes(int ecl)
+        /// <summary>Largest payload at this level and mode, for error messages.</summary>
+        public static int MaxUnits(int ecl, QrMode mode)
         {
-            return DataCodewords(40, ecl) - 3; // 4-bit mode + 16-bit count = 3 bytes
+            int usable = DataCodewords(40, ecl) * 8 - 4 - CharCountBits(40, mode);
+            return mode == QrMode.Byte ? usable / 8 : usable / 11 * 2 + (usable % 11 >= 6 ? 1 : 0);
         }
 
-        public static bool Fits(int byteCount, int version, int ecl)
+        /// <summary>Bits one segment occupies, header included.</summary>
+        private static int SegmentBits(int count, int version, QrMode mode)
         {
-            return 4 + CharCountBits(version) + 8 * byteCount <= DataCodewords(version, ecl) * 8;
+            int header = 4 + CharCountBits(version, mode);
+            return mode == QrMode.Byte
+                ? header + 8 * count
+                : header + 11 * (count / 2) + 6 * (count % 2);
         }
 
-        private static int ChooseVersion(int byteCount, int ecl)
+        public static bool Fits(int count, int version, int ecl, QrMode mode)
+        {
+            return SegmentBits(count, version, mode) <= DataCodewords(version, ecl) * 8;
+        }
+
+        private static int ChooseVersion(int count, int ecl, QrMode mode)
         {
             for (int version = 1; version <= 40; version++)
-                if (Fits(byteCount, version, ecl)) return version;
+                if (Fits(count, version, ecl, mode)) return version;
             return -1;
         }
 
         // ── Construction ───────────────────────────────────────────────────
 
-        private QrCode(int version, QrEcc ecc, byte[] dataCodewords)
+        private QrCode(int version, QrEcc ecc, QrMode mode, byte[] dataCodewords)
         {
             Version = version;
             Ecc = ecc;
+            Mode = mode;
             Size = version * 4 + 17;
 
             _modules = NewGrid(Size);
@@ -385,19 +430,36 @@ namespace Substation.Qr
 
         // ── Data encoding ──────────────────────────────────────────────────
 
-        private static int CharCountBits(int version)
+        private static int CharCountBits(int version, QrMode mode)
         {
-            return version <= 9 ? 8 : 16; // byte mode
+            if (mode == QrMode.Byte) return version <= 9 ? 8 : 16;
+            return version <= 9 ? 9 : (version <= 26 ? 11 : 13);
         }
 
-        private static byte[] BuildCodewords(byte[] data, int version, int ecl)
+        private static byte[] BuildCodewords(string text, byte[] data, int version, int ecl, QrMode mode)
         {
             int capacityBits = DataCodewords(version, ecl) * 8;
-
             var bits = new List<bool>(capacityBits);
-            AppendBits(bits, 4, 4);                              // byte-mode indicator
-            AppendBits(bits, data.Length, CharCountBits(version));
-            foreach (byte b in data) AppendBits(bits, b, 8);
+
+            if (mode == QrMode.Alphanumeric)
+            {
+                AppendBits(bits, 2, 4);                                    // alphanumeric indicator
+                AppendBits(bits, text.Length, CharCountBits(version, mode));
+
+                // Two characters per 11 bits; an odd last one takes 6.
+                int i = 0;
+                for (; i + 1 < text.Length; i += 2)
+                    AppendBits(bits, AlphanumericTable.IndexOf(text[i]) * 45 +
+                                     AlphanumericTable.IndexOf(text[i + 1]), 11);
+                if (i < text.Length)
+                    AppendBits(bits, AlphanumericTable.IndexOf(text[i]), 6);
+            }
+            else
+            {
+                AppendBits(bits, 4, 4);                                    // byte indicator
+                AppendBits(bits, data.Length, CharCountBits(version, mode));
+                foreach (byte b in data) AppendBits(bits, b, 8);
+            }
 
             // Terminator, then pad to a whole byte, then alternating pad bytes.
             int terminator = Math.Min(4, capacityBits - bits.Count);

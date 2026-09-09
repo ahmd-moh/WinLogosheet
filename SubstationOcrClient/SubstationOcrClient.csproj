@@ -95,12 +95,6 @@
     <Compile Include="..\Shared\Capture\SessionClock.cs">
       <Link>Shared\SessionClock.cs</Link>
     </Compile>
-    <Compile Include="..\Shared\Qr\QrEncoder.cs">
-      <Link>Shared\QrEncoder.cs</Link>
-    </Compile>
-    <Compile Include="..\Shared\Qr\QrPayload.cs">
-      <Link>Shared\QrPayload.cs</Link>
-    </Compile>
   </ItemGroup>
   <ItemGroup>
     <Compile Include="ClientConfig.cs" />

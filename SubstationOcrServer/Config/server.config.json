@@ -1,5 +1,5 @@
 {
-  "_readme": "132 kV SERVER node. Reads its own SECONDARY screen at :02 every hour, receives the 33 kV client's values over TCP, and flashes the gathered session as a QR code on the MAIN screen when the operator holds Ctrl+Shift and presses 7, 8, 9. Runs 07:00 to 07:00, then stops until started again by hand. sharedSecret must match client.config.json.",
+  "_readme": "132 kV SERVER node. Reads its own SECONDARY screen at :02 every hour, receives the 33 kV client's values over TCP, and shows the LS1 QR code on the MAIN screen when the operator holds Ctrl+Shift and presses 7, then 8, then 9 (each within three seconds). Runs 07:00 to 07:00, then stops until started again by hand. sharedSecret must match client.config.json.",
   "nodeId": "S132",
   "displayName": "132 kV SWITCHGEAR SLD WALL VIEW",
   "sharedSecret": "CHANGE-ME-same-string-on-both-servers",
@@ -18,11 +18,7 @@
   "allowedClients": [],
   "substationCode": "MSL-E",
   "qrSeconds": 5,
-  "qr": {
-    "format": "v2json",
-    "ecc": "L",
-    "urlTemplate": ""
-  },
+  "qrScreen": "primary",
   "columns": [
     {
       "col": 1,

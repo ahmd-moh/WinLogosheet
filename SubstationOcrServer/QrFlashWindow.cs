@@ -1,191 +1,138 @@
 using System;
 using System.Drawing;
-using System.Globalization;
+using System.Drawing.Drawing2D;
 using System.Windows.Forms;
 
 namespace SubstationOcrServer
 {
     /// <summary>
-    /// Flashes the QR code on the MAIN screen for a few seconds, then hides.
+    /// Full-screen surface showing only the QR code — no buttons, no labels, no
+    /// chrome. This is the one thing either node ever puts on screen.
     ///
-    /// This is the only thing either node ever puts on screen. It is borderless,
-    /// topmost, click-through-free and takes no focus — the SCADA application
-    /// underneath keeps the keyboard, which matters on a live operator desktop.
-    /// It closes on its own after the configured time, or on any key or click.
+    /// It targets the MAIN screen: on these servers the secondary head carries
+    /// the SCADA wall view being read, so the code goes on the operator's own
+    /// display. `qrScreen` in the config overrides that.
+    ///
+    /// It closes on Esc, on a click, on the hotkey again, or after qrSeconds.
+    /// The form takes ownership of the bitmap and disposes it on close.
     /// </summary>
     public sealed class QrFlashWindow : Form
     {
-        private readonly PictureBox _picture;
-        private readonly Label _caption;
-        private readonly Label _footer;
-        private readonly Timer _hideTimer;
+        private readonly Bitmap _qr;
+        private readonly Timer _autoHide;
+        private readonly string _caption;
 
-        private Image[] _pages = new Image[0];
-        private string[] _captions = new string[0];
-        private int _page;
-        private int _secondsPerPage;
+        /// <summary>Why the window went away — read by the caller when logging.</summary>
+        public string HideReason { get; set; }
 
-        public QrFlashWindow()
+        public QrFlashWindow(Bitmap qr, string caption, int seconds, string qrScreen)
         {
+            _qr = qr;
+            _caption = caption ?? "";
+            HideReason = "external";
+
+            Screen target = PickScreen(qrScreen);
+
             FormBorderStyle = FormBorderStyle.None;
             StartPosition = FormStartPosition.Manual;
+            Bounds = target.Bounds;
             TopMost = true;
             ShowInTaskbar = false;
-            BackColor = Color.White;
-            DoubleBuffered = true;
+            BackColor = Color.Black;
+            KeyPreview = true;
 
-            _caption = new Label
+            SetStyle(ControlStyles.AllPaintingInWmPaint |
+                     ControlStyles.OptimizedDoubleBuffer |
+                     ControlStyles.UserPaint |
+                     ControlStyles.ResizeRedraw, true);
+
+            KeyDown += (s, e) =>
             {
-                Dock = DockStyle.Top,
-                Height = 34,
-                TextAlign = ContentAlignment.MiddleCenter,
-                Font = new Font("Segoe UI", 12, FontStyle.Bold),
-                ForeColor = Color.Black
+                if (e.KeyCode != Keys.Escape) return;
+                HideReason = "Esc";
+                Close();
             };
+            MouseClick += (s, e) => { HideReason = "click"; Close(); };
 
-            _picture = new PictureBox
+            _autoHide = new Timer { Interval = Math.Max(1, seconds) * 1000 };
+            _autoHide.Tick += (s, e) =>
             {
-                Dock = DockStyle.Fill,
-                SizeMode = PictureBoxSizeMode.CenterImage,
-                BackColor = Color.White
+                HideReason = "auto-timeout " + seconds + " s";
+                Close();
             };
-
-            _footer = new Label
-            {
-                Dock = DockStyle.Bottom,
-                Height = 28,
-                TextAlign = ContentAlignment.MiddleCenter,
-                Font = new Font("Segoe UI", 9),
-                ForeColor = Color.DimGray
-            };
-
-            Controls.Add(_picture);
-            Controls.Add(_footer);
-            Controls.Add(_caption);
-
-            _hideTimer = new Timer();
-            _hideTimer.Tick += (s, e) => NextPageOrHide();
-
-            _picture.Click += (s, e) => HideNow();
-            _caption.Click += (s, e) => HideNow();
-            _footer.Click += (s, e) => HideNow();
-            Click += (s, e) => HideNow();
-        }
-
-        /// <summary>Never steal focus from the SCADA application underneath.</summary>
-        protected override bool ShowWithoutActivation { get { return true; } }
-
-        protected override CreateParams CreateParams
-        {
-            get
-            {
-                CreateParams parameters = base.CreateParams;
-                parameters.ExStyle |= 0x08000000;  // WS_EX_NOACTIVATE
-                parameters.ExStyle |= 0x00000008;  // WS_EX_TOPMOST
-                return parameters;
-            }
+            _autoHide.Start();
         }
 
         /// <summary>
-        /// Shows one or more codes on the primary screen. With several pages
-        /// each is held for the same number of seconds before the next appears,
-        /// so the operator can scan a multi-part payload in one pass.
+        /// "primary" (the default) is the operator's own display. "secondary"
+        /// picks the first non-primary screen; a number picks that index.
+        /// Anything unresolvable falls back to the primary, so the code is
+        /// never displayed nowhere.
         /// </summary>
-        public void Flash(Image[] pages, string[] captions, string footer, int secondsPerPage)
+        public static Screen PickScreen(string qrScreen)
         {
-            if (pages == null || pages.Length == 0) return;
+            Screen[] screens = Screen.AllScreens;
+            if (screens.Length == 0) return Screen.PrimaryScreen;
 
-            DisposePages();
-            _pages = pages;
-            _captions = captions ?? new string[pages.Length];
-            _page = 0;
-            _secondsPerPage = Math.Max(1, secondsPerPage);
-            _footer.Text = footer ?? "";
+            string want = (qrScreen ?? "primary").Trim();
 
-            Rectangle screen = Screen.PrimaryScreen.WorkingArea;
-            int side = (int)(Math.Min(screen.Width, screen.Height) * 0.82);
-            side = Math.Max(360, side);
+            int index;
+            if (int.TryParse(want, out index))
+                return index >= 0 && index < screens.Length ? screens[index] : Screen.PrimaryScreen;
 
-            Size = new Size(side, side + _caption.Height + _footer.Height);
-            Location = new Point(screen.X + (screen.Width - Width) / 2,
-                                 screen.Y + (screen.Height - Height) / 2);
-
-            ShowPage();
-
-            _hideTimer.Interval = _secondsPerPage * 1000;
-            _hideTimer.Start();
-
-            Show();
-            TopMost = true;
-            BringToFront();
-        }
-
-        private void ShowPage()
-        {
-            _picture.Image = _pages[_page];
-            _caption.Text = _page < _captions.Length ? _captions[_page] : "";
-        }
-
-        private void NextPageOrHide()
-        {
-            if (_page + 1 < _pages.Length)
+            if (want.Equals("secondary", StringComparison.OrdinalIgnoreCase))
             {
-                _page++;
-                ShowPage();
-                return;
+                foreach (Screen screen in screens)
+                    if (!screen.Primary) return screen;
             }
-            HideNow();
+
+            return Screen.PrimaryScreen;
         }
 
-        private void HideNow()
+        protected override void OnPaint(PaintEventArgs e)
         {
-            _hideTimer.Stop();
-            _picture.Image = null;
-            Hide();
-            DisposePages();
-        }
+            base.OnPaint(e);
+            if (_qr == null) return;
 
-        private void DisposePages()
-        {
-            foreach (Image page in _pages)
-                if (page != null) page.Dispose();
-            _pages = new Image[0];
-        }
+            // Largest size that fits with a margin, snapped to a whole multiple
+            // of the source pixels so the modules stay razor sharp. Falls back to
+            // a plain fit if the code is somehow larger than the screen.
+            int side = (int)(Math.Min(ClientSize.Width, ClientSize.Height) * 0.90f);
+            if (side < 1) return;
 
-        protected override bool ProcessCmdKey(ref Message msg, Keys keyData)
-        {
-            // Any key dismisses it early.
-            HideNow();
-            return base.ProcessCmdKey(ref msg, keyData);
-        }
+            int scale = side / _qr.Width;
+            int size = scale >= 1 ? _qr.Width * scale : side;
 
-        protected override void OnFormClosing(FormClosingEventArgs e)
-        {
-            // The window lives for the life of the process; hide, never close.
-            if (e.CloseReason == CloseReason.UserClosing)
+            int x = (ClientSize.Width - size) / 2;
+            int y = (ClientSize.Height - size) / 2;
+
+            // A white mat behind the code guarantees the quiet zone against the
+            // black background, whatever the bitmap itself carries.
+            int pad = Math.Max(12, size / 25);
+            e.Graphics.FillRectangle(Brushes.White, x - pad, y - pad, size + pad * 2, size + pad * 2);
+
+            e.Graphics.InterpolationMode = InterpolationMode.NearestNeighbor;
+            e.Graphics.PixelOffsetMode = PixelOffsetMode.Half;
+            e.Graphics.DrawImage(_qr, x, y, size, size);
+
+            if (_caption.Length == 0) return;
+
+            using (var font = new Font("Segoe UI", 14, FontStyle.Bold))
+            using (var brush = new SolidBrush(Color.White))
             {
-                e.Cancel = true;
-                HideNow();
-                return;
+                SizeF measured = e.Graphics.MeasureString(_caption, font);
+                e.Graphics.DrawString(_caption, font, brush,
+                    (ClientSize.Width - measured.Width) / 2,
+                    Math.Max(4, y - pad - measured.Height - 10));
             }
-            base.OnFormClosing(e);
         }
 
-        protected override void Dispose(bool disposing)
+        protected override void OnFormClosed(FormClosedEventArgs e)
         {
-            if (disposing)
-            {
-                _hideTimer.Dispose();
-                DisposePages();
-            }
-            base.Dispose(disposing);
-        }
-
-        /// <summary>Convenience for the status caption under the code.</summary>
-        public static string DescribeCoverage(int hoursHeld, int hoursExpected)
-        {
-            return string.Format(CultureInfo.InvariantCulture,
-                "{0} of {1} hour(s) gathered", hoursHeld, hoursExpected);
+            _autoHide.Stop();
+            _autoHide.Dispose();
+            if (_qr != null) _qr.Dispose();
+            base.OnFormClosed(e);
         }
     }
 }

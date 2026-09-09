@@ -67,10 +67,10 @@ namespace SubstationOcrServer
 
                 foreach (var pair in byHour)
                 {
-                    var values = new string[QrPayloadBuilder.ColumnCount];
+                    var values = new string[LogsheetQr.ColumnCount];
                     bool any = false;
 
-                    for (int column = 1; column <= QrPayloadBuilder.ColumnCount; column++)
+                    for (int column = 1; column <= LogsheetQr.ColumnCount; column++)
                     {
                         ColumnBinding binding = _config.Columns.For(column);
                         if (binding == null) { values[column - 1] = ""; continue; }
@@ -94,9 +94,9 @@ namespace SubstationOcrServer
         }
 
         /// <summary>
-        /// The sheet records whole units, so the fractional part is dropped and
-        /// the sign left off — the same shape the printed logsheet always used,
-        /// and it keeps the QR payload small enough for one symbol.
+        /// The LS1 cell grammar carries integers only — the phone's parser keeps
+        /// just the digits of each cell — so the fractional part is dropped and
+        /// the sign left off here, the same shape the printed logsheet used.
         /// </summary>
         private static string Trim(string value)
         {

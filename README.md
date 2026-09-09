@@ -28,9 +28,10 @@ SCADA wall views and hand them to a phone as a QR code.
    whole night.
 4. Both applications run **fully hidden** — no window, no taskbar entry, no tray
    icon. Everything goes to a day-stamped log file.
-5. On the 132 kV server, hold **Ctrl+Shift** and press **7**, **8**, **9**. The
-   gathered session appears as a QR code on the main screen for 3–5 seconds,
-   then hides. Scan it with the Android app.
+5. On the 132 kV server, hold **Ctrl+Shift** and press **7**, then **8**, then
+   **9**. The gathered session fills the main screen as a QR code for 3–5
+   seconds, then hides. Scan it with the existing Android companion app — the
+   payload is the same `LS1` format it already parses.
 
 That is the whole system. Nothing is printed and nothing is exported to Excel.
 
