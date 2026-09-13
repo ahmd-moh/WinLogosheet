@@ -1,0 +1,31 @@
+﻿
+Microsoft Visual Studio Solution File, Format Version 12.00
+# Visual Studio Version 17
+VisualStudioVersion = 17.9.34728.123
+MinimumVisualStudioVersion = 10.0.40219.1
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "SubstationOcrServer", "SubstationOcrServer\SubstationOcrServer.csproj", "{A71D3E48-6C2B-4F19-9E30-7B5A2C8D4E61}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "SubstationOcrClient", "SubstationOcrClient\SubstationOcrClient.csproj", "{B82E4F59-7D3C-4A20-8F41-6C4B3D9E5F72}"
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|Any CPU = Debug|Any CPU
+		Release|Any CPU = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{A71D3E48-6C2B-4F19-9E30-7B5A2C8D4E61}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{A71D3E48-6C2B-4F19-9E30-7B5A2C8D4E61}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{A71D3E48-6C2B-4F19-9E30-7B5A2C8D4E61}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{A71D3E48-6C2B-4F19-9E30-7B5A2C8D4E61}.Release|Any CPU.Build.0 = Release|Any CPU
+		{B82E4F59-7D3C-4A20-8F41-6C4B3D9E5F72}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{B82E4F59-7D3C-4A20-8F41-6C4B3D9E5F72}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{B82E4F59-7D3C-4A20-8F41-6C4B3D9E5F72}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{B82E4F59-7D3C-4A20-8F41-6C4B3D9E5F72}.Release|Any CPU.Build.0 = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(SolutionProperties) = preSolution
+		HideSolutionNode = FALSE
+	EndGlobalSection
+	GlobalSection(ExtensibilityGlobals) = postSolution
+		SolutionGuid = {52B97E64-4629-4FAD-A371-E7234F902C5C}
+	EndGlobalSection
+EndGlobal

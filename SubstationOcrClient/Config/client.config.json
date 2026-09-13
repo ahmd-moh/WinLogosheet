@@ -1,0 +1,22 @@
+{
+  "_readme": "33 kV CLIENT node. Reads its own SECONDARY screen at :02 every hour and pushes the values to the 132 kV server node. Runs 07:00 to 07:00, then stops until started again by hand. sharedSecret must match server.config.json, and serverHost must be the 132 kV server's LAN address.",
+  "nodeId": "S33",
+  "displayName": "33 kV SWITCHGEAR SLD WALL VIEW",
+  "sharedSecret": "CHANGE-ME-same-string-on-both-servers",
+  "roiConfigPath": "Config\\roi-33kv.json",
+  "tessDataPath": "C:\\Program Files\\Tesseract-OCR\\tessdata",
+  "captureScreen": "primary",
+  "captureMinute": 2,
+  "dataFolder": "Data",
+  "logFolder": "Logs",
+  "retentionDays": 120,
+  "showTrayIcon": false,
+  "runAtLogon": false,
+  "exitWhenSessionEnds": false,
+  "keepFullScreenshots": false,
+  "serverHost": "192.168.0.17",
+  "serverPort": 5115,
+  "timeoutMs": 15000,
+  "retrySeconds": 120,
+  "pollSeconds": 20
+}

@@ -1,0 +1,227 @@
+{
+  "schema": 1,
+  "serverId": "S33",
+  "displayName": "33 kV SWITCHGEAR SLD WALL VIEW",
+  "_calibration": "Rectangles measured on the 1885x941 reference capture of the 33 kV wall view. The boxes here are about 10 px per row, so they are upscaled 6x before OCR.",
+  "referenceWidth": 1885,
+  "referenceHeight": 941,
+  "rois": [
+    {
+      "id": "T1",
+      "label": "TRANSFORMER INCOMER-1",
+      "channel": "T1",
+      "enabled": true,
+      "rect": {
+        "x": 369,
+        "y": 165,
+        "w": 56,
+        "h": 31
+      },
+      "rows": [
+        "A",
+        "MW",
+        "MVAR"
+      ],
+      "scale": 6,
+      "invert": true,
+      "colorChannel": "green",
+      "minConfidence": 55.0,
+      "rowPadding": 1
+    },
+    {
+      "id": "T2",
+      "label": "TRANSFORMER INCOMER-2",
+      "channel": "T2",
+      "enabled": true,
+      "rect": {
+        "x": 1035,
+        "y": 165,
+        "w": 59,
+        "h": 31
+      },
+      "rows": [
+        "A",
+        "MW",
+        "MVAR"
+      ],
+      "scale": 6,
+      "invert": true,
+      "colorChannel": "green",
+      "minConfidence": 55.0,
+      "rowPadding": 1
+    },
+    {
+      "id": "T3",
+      "label": "TRANSFORMER INCOMER-3",
+      "channel": "T3",
+      "enabled": true,
+      "rect": {
+        "x": 1534,
+        "y": 165,
+        "w": 56,
+        "h": 31
+      },
+      "rows": [
+        "A",
+        "MW",
+        "MVAR"
+      ],
+      "scale": 6,
+      "invert": true,
+      "colorChannel": "green",
+      "minConfidence": 55.0,
+      "rowPadding": 1
+    },
+    {
+      "id": "BUS1A",
+      "label": "BUS 1A busbar voltage",
+      "channel": "BUS1A",
+      "enabled": true,
+      "rect": {
+        "x": 226,
+        "y": 435,
+        "w": 73,
+        "h": 13
+      },
+      "rows": [
+        "KV"
+      ],
+      "scale": 6,
+      "invert": true,
+      "colorChannel": "green",
+      "minConfidence": 55.0,
+      "rowPadding": 1,
+      "_note": "Not red-outlined. The incomer boxes carry A/MW/MVAR only, so this feeds the T1 KV column of the logsheet. Set enabled to false if that column is not logged."
+    },
+    {
+      "id": "BUS2A",
+      "label": "BUS 2A busbar voltage",
+      "channel": "BUS2A",
+      "enabled": true,
+      "rect": {
+        "x": 1131,
+        "y": 444,
+        "w": 74,
+        "h": 14
+      },
+      "rows": [
+        "KV"
+      ],
+      "scale": 6,
+      "invert": true,
+      "colorChannel": "green",
+      "minConfidence": 55.0,
+      "rowPadding": 1,
+      "_note": "Feeds the T2 KV column - see the BUS1A note."
+    },
+    {
+      "id": "BUS2B",
+      "label": "BUS 2B busbar voltage",
+      "channel": "BUS2B",
+      "enabled": true,
+      "rect": {
+        "x": 1756,
+        "y": 448,
+        "w": 76,
+        "h": 14
+      },
+      "rows": [
+        "KV"
+      ],
+      "scale": 6,
+      "invert": true,
+      "colorChannel": "green",
+      "minConfidence": 55.0,
+      "rowPadding": 1,
+      "_note": "Feeds the T3 KV column - see the BUS1A note."
+    },
+    {
+      "id": "FDR_DOMEZ",
+      "label": "CABLE FEEDER-1 (Domez)",
+      "channel": "FDR_DOMEZ",
+      "enabled": true,
+      "rect": {
+        "x": 138,
+        "y": 888,
+        "w": 42,
+        "h": 27
+      },
+      "rows": [
+        "A",
+        "MW",
+        "MVAR"
+      ],
+      "scale": 6,
+      "invert": true,
+      "colorChannel": "green",
+      "minConfidence": 55.0,
+      "rowPadding": 1
+    },
+    {
+      "id": "FDR_SUMMER",
+      "label": "CABLE FEEDER-6 (Summer)",
+      "channel": "FDR_SUMMER",
+      "enabled": true,
+      "rect": {
+        "x": 902,
+        "y": 888,
+        "w": 40,
+        "h": 27
+      },
+      "rows": [
+        "A",
+        "MW",
+        "MVAR"
+      ],
+      "scale": 6,
+      "invert": true,
+      "colorChannel": "green",
+      "minConfidence": 55.0,
+      "rowPadding": 1
+    },
+    {
+      "id": "FDR_SALAM1",
+      "label": "CABLE FEEDER-7 (Salam 1)",
+      "channel": "FDR_SALAM1",
+      "enabled": true,
+      "rect": {
+        "x": 969,
+        "y": 888,
+        "w": 42,
+        "h": 27
+      },
+      "rows": [
+        "A",
+        "MW",
+        "MVAR"
+      ],
+      "scale": 6,
+      "invert": true,
+      "colorChannel": "green",
+      "minConfidence": 55.0,
+      "rowPadding": 1
+    },
+    {
+      "id": "FDR_SALAM2",
+      "label": "CABLE FEEDER-12 (Salam 2)",
+      "channel": "FDR_SALAM2",
+      "enabled": true,
+      "rect": {
+        "x": 1723,
+        "y": 888,
+        "w": 40,
+        "h": 27
+      },
+      "rows": [
+        "A",
+        "MW",
+        "MVAR"
+      ],
+      "scale": 6,
+      "invert": true,
+      "colorChannel": "green",
+      "minConfidence": 55.0,
+      "rowPadding": 1
+    }
+  ]
+}
