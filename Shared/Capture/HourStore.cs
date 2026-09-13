@@ -10,13 +10,12 @@ namespace Substation.Capture
     /// Every reading a node holds, on that node's own disk, as
     /// Data\Readings-yyyy-MM-dd\HH-NODEID.json.
     ///
-    /// The node id is part of the file name because the server node stores both
-    /// its own readings and the ones the client pushes up, and the same hour
-    /// arrives twice — once from each display.
+    /// The node id is part of the file name so two nodes can never overwrite
+    /// each other's hours, even when both are run from one folder for testing.
     ///
-    /// The store is what makes a link outage survivable: each node goes on
-    /// reading its display every hour whether or not the other end is reachable,
-    /// and the backlog is drained once it returns.
+    /// The store is what makes a restart harmless: a node started again
+    /// mid-session picks every hour it already read back up from disk, and the
+    /// QR code still carries the whole session.
     /// </summary>
     public sealed class HourStore
     {

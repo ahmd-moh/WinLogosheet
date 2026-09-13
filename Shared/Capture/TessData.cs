@@ -63,8 +63,8 @@ namespace Substation.Capture
         /// holds the language file. Reports what it did either way.
         ///
         /// Returning null rather than throwing is deliberate: the node still
-        /// starts, so the socket link, the stored hours and the QR hotkey all
-        /// keep working on whatever was gathered before OCR broke.
+        /// starts, so the stored hours and the QR hotkey keep working on
+        /// whatever was gathered before OCR broke.
         /// </summary>
         public static string Resolve(string configured, NodeLog log)
         {

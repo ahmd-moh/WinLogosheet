@@ -4,11 +4,11 @@
   <PropertyGroup>
     <Configuration Condition=" '$(Configuration)' == '' ">Debug</Configuration>
     <Platform Condition=" '$(Platform)' == '' ">AnyCPU</Platform>
-    <ProjectGuid>{B82E4F59-7D3C-4A20-8F41-6C4B3D9E5F72}</ProjectGuid>
+    <ProjectGuid>{A71D3E48-6C2B-4F19-9E30-7B5A2C8D4E61}</ProjectGuid>
     <OutputType>WinExe</OutputType>
-    <RootNamespace>SubstationOcrClient</RootNamespace>
-    <AssemblyName>SubstationOcrClient</AssemblyName>
-    <!-- 4.7, not 4.8: the substation servers run .NET Framework 4.7, and an exe
+    <RootNamespace>SubstationOcr</RootNamespace>
+    <AssemblyName>SubstationOcr</AssemblyName>
+    <!-- 4.7, not 4.8: the substation PCs run .NET Framework 4.7, and an exe
          built for 4.8 refuses to start there before a line of it runs. The
          Microsoft.NETFramework.ReferenceAssemblies.net47 package supplies the 4.7
          reference assemblies, so this builds even where Visual Studio has no
@@ -58,10 +58,7 @@
     </Reference>
   </ItemGroup>
   <ItemGroup>
-    <!-- Wire and capture code, compiled into both nodes: one definition, two apps. -->
-    <Compile Include="..\Shared\Protocol\AgentProtocol.cs">
-      <Link>Shared\AgentProtocol.cs</Link>
-    </Compile>
+    <!-- Capture, OCR, storage and QR code, kept under Shared/. -->
     <Compile Include="..\Shared\Protocol\ColumnMap.cs">
       <Link>Shared\ColumnMap.cs</Link>
     </Compile>
@@ -116,24 +113,44 @@
     <Compile Include="..\Shared\Capture\TessData.cs">
       <Link>Shared\TessData.cs</Link>
     </Compile>
+    <Compile Include="..\Shared\Qr\QrEncoder.cs">
+      <Link>Shared\QrEncoder.cs</Link>
+    </Compile>
+    <Compile Include="..\Shared\Qr\LogsheetQr.cs">
+      <Link>Shared\LogsheetQr.cs</Link>
+    </Compile>
   </ItemGroup>
   <ItemGroup>
-    <Compile Include="ClientConfig.cs" />
+    <Compile Include="CalibrationWindow.cs">
+      <SubType>Form</SubType>
+    </Compile>
+    <Compile Include="HotkeySink.cs">
+      <SubType>Form</SubType>
+    </Compile>
     <Compile Include="Program.cs" />
-    <Compile Include="ReadingUplink.cs" />
-    <Compile Include="ServerLink.cs" />
+    <Compile Include="QrFlashWindow.cs">
+      <SubType>Form</SubType>
+    </Compile>
+    <Compile Include="SessionSheet.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
   </ItemGroup>
   <ItemGroup>
     <None Include="App.config" />
     <None Include="app.manifest" />
     <None Include="packages.config" />
+    <Content Include="Config\roi-132kv.json">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </Content>
     <Content Include="Config\roi-33kv.json">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </Content>
-    <!-- The node reads its config from beside the exe, so land it there. -->
-    <Content Include="Config\client.config.json">
-      <Link>client.config.json</Link>
+    <!-- One exe for both PCs, so neither config is landed beside it: on each PC
+         the right one is copied next to the exe as node.config.json. Landing
+         one here would quietly make every PC that PC. -->
+    <Content Include="Config\node-132kv.config.json">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </Content>
+    <Content Include="Config\node-33kv.config.json">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </Content>
   </ItemGroup>
@@ -144,6 +161,16 @@
     </PropertyGroup>
     <Error Condition="!Exists('..\packages\Tesseract.5.2.0\build\Tesseract.targets')" Text="$([System.String]::Format('$(ErrorText)', '..\packages\Tesseract.5.2.0\build\Tesseract.targets'))" />
     <Error Condition="!Exists('..\packages\Microsoft.NETFramework.ReferenceAssemblies.net47.1.0.3\build\Microsoft.NETFramework.ReferenceAssemblies.net47.targets')" Text="$([System.String]::Format('$(ErrorText)', '..\packages\Microsoft.NETFramework.ReferenceAssemblies.net47.1.0.3\build\Microsoft.NETFramework.ReferenceAssemblies.net47.targets'))" />
+  </Target>
+  <!-- Visual Studio retargets this project to 4.8 when it opens it on a machine
+       without the 4.7 targeting pack, and a 4.8 exe does not start on the
+       substation PCs. Stop the build rather than produce one. -->
+  <Target Name="RequireNetFramework47" BeforeTargets="PrepareForBuild">
+    <XmlPeek XmlInputPath="App.config" Query="/configuration/startup/supportedRuntime/@sku">
+      <Output TaskParameter="Result" PropertyName="SupportedRuntimeSku" />
+    </XmlPeek>
+    <Error Condition="'$(TargetFrameworkVersion)' != 'v4.7'" Text="SubstationOcr must target .NET Framework 4.7, but TargetFrameworkVersion is $(TargetFrameworkVersion). The substation PCs run 4.7, and an exe built for a newer framework does not start there. Visual Studio retargets the project when the 4.7 targeting pack is missing: set TargetFrameworkVersion back to v4.7 in SubstationOcr.csproj and the sku in App.config, and install the '.NET Framework 4.7 targeting pack' component so it stops asking." />
+    <Error Condition="'$(SupportedRuntimeSku)' != '.NETFramework,Version=v4.7'" Text="App.config must declare sku=&quot;.NETFramework,Version=v4.7&quot;, but it declares &quot;$(SupportedRuntimeSku)&quot;. With a newer sku Windows refuses to start the exe on the substation PCs, which run 4.7." />
   </Target>
   <Import Project="..\packages\Tesseract.5.2.0\build\Tesseract.targets" Condition="Exists('..\packages\Tesseract.5.2.0\build\Tesseract.targets')" />
   <Import Project="..\packages\Microsoft.NETFramework.ReferenceAssemblies.net47.1.0.3\build\Microsoft.NETFramework.ReferenceAssemblies.net47.targets" Condition="Exists('..\packages\Microsoft.NETFramework.ReferenceAssemblies.net47.1.0.3\build\Microsoft.NETFramework.ReferenceAssemblies.net47.targets')" />

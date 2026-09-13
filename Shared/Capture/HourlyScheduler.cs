@@ -29,8 +29,7 @@ namespace Substation.Capture
         private string _lastSlot = "";
         private bool _sessionClosed;
 
-        /// <summary>Raised after each stored reading. The client uses it to push
-        /// the values on to the server node.</summary>
+        /// <summary>Raised after each stored reading.</summary>
         public event Action<ReadingFrame> ReadingTaken;
 
         /// <summary>Raised once, when the 07:00 window closes.</summary>

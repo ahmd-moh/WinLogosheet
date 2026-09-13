@@ -1,11 +1,10 @@
 {
-  "_readme": "132 kV SERVER node. Reads its own SECONDARY screen at :02 every hour, receives the 33 kV client's values over TCP, and shows the LS1 QR code on the MAIN screen when the operator holds Ctrl+Shift and presses 7, then 8, then 9 (each within three seconds). Runs 07:00 to 07:00, then stops until started again by hand. sharedSecret must match client.config.json.",
-  "nodeId": "S132",
-  "displayName": "132 kV SWITCHGEAR SLD WALL VIEW",
-  "sharedSecret": "CHANGE-ME-same-string-on-both-servers",
-  "roiConfigPath": "Config\\roi-132kv.json",
+  "_readme": "33 kV PC. Copy this file next to SubstationOcr.exe and rename it node.config.json. Reads this PC's SECONDARY screen at :02 every hour and shows this PC's part of the logsheet - columns 9-24 - as an LS1 QR code on the MAIN screen when the operator holds Ctrl+Shift and presses 7, then 8, then 9 (each within three seconds). Runs 07:00 to 07:00, then stops until started again by hand. The 132 kV PC shows columns 1-8 in its own code; the phone merges the two scans. No network link is used.",
+  "nodeId": "S33",
+  "displayName": "33 kV SWITCHGEAR SLD WALL VIEW",
+  "roiConfigPath": "Config\\roi-33kv.json",
   "tessDataPath": "C:\\Program Files\\Tesseract-OCR\\tessdata",
-  "captureScreen": "primary",
+  "captureScreen": "secondary",
   "captureMinute": 2,
   "dataFolder": "Data",
   "logFolder": "Logs",
@@ -14,71 +13,10 @@
   "runAtLogon": false,
   "exitWhenSessionEnds": false,
   "keepFullScreenshots": false,
-  "listenAddress": "0.0.0.0",
-  "port": 5115,
-  "allowedClients": [],
   "substationCode": "MSL-E",
-  "clientNodeId": "S33",
-  "calibrationMaxWidth": 1920,
   "qrSeconds": 5,
   "qrScreen": "primary",
   "columns": [
-    {
-      "col": 1,
-      "source": "S132",
-      "channel": "YARMJA.KV",
-      "label": "Yarmja KV",
-      "busClass": "132"
-    },
-    {
-      "col": 2,
-      "source": "S132",
-      "channel": "YARMJA.A",
-      "label": "Yarmja A",
-      "busClass": "132"
-    },
-    {
-      "col": 3,
-      "source": "S132",
-      "channel": "YARMJA.MW",
-      "label": "Yarmja MW",
-      "busClass": "132"
-    },
-    {
-      "col": 4,
-      "source": "S132",
-      "channel": "YARMJA.MVAR",
-      "label": "Yarmja MVAR",
-      "busClass": "132"
-    },
-    {
-      "col": 5,
-      "source": "S132",
-      "channel": "QAYARA.KV",
-      "label": "Qayra KV",
-      "busClass": "132"
-    },
-    {
-      "col": 6,
-      "source": "S132",
-      "channel": "QAYARA.A",
-      "label": "Qayra A",
-      "busClass": "132"
-    },
-    {
-      "col": 7,
-      "source": "S132",
-      "channel": "QAYARA.MW",
-      "label": "Qayra MW",
-      "busClass": "132"
-    },
-    {
-      "col": 8,
-      "source": "S132",
-      "channel": "QAYARA.MVAR",
-      "label": "Qayra MVAR",
-      "busClass": "132"
-    },
     {
       "col": 9,
       "source": "S33",

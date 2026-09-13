@@ -69,8 +69,8 @@ namespace Substation.Shared
     }
 
     /// <summary>
-    /// Everything one agent read from its display for one hour. This — not a
-    /// screenshot — is what travels over the socket.
+    /// Everything one node read from its display for one hour. This — not a
+    /// screenshot — is what is stored and what the QR code is built from.
     /// </summary>
     public sealed class ReadingFrame
     {

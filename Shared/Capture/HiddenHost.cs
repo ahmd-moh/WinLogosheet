@@ -9,11 +9,11 @@ namespace Substation.Capture
     /// <summary>
     /// Runs a node with no window at all.
     ///
-    /// Both nodes are meant to be invisible on the SCADA desktop: no form, no
-    /// taskbar entry and, by default, no tray icon either. Everything they do
+    /// The node is meant to be invisible on the SCADA desktop: no form, no
+    /// taskbar entry and, by default, no tray icon either. Everything it does
     /// goes to the day's log file. A tray icon can be switched on in the config
     /// while commissioning, when someone on site needs to force a reading or
-    /// write the ROI overlay without opening a remote session.
+    /// check the boxes without opening a remote session.
     /// </summary>
     public sealed class HiddenHost : ApplicationContext
     {
@@ -25,7 +25,7 @@ namespace Substation.Capture
 
         /// <summary>
         /// A control that is never shown, never parented and never painted. It
-        /// exists only for its window handle: work that arrives on a socket or a
+        /// exists only for its window handle: work that finishes on a worker or a
         /// timer thread has to cross onto the UI thread before it can touch a
         /// tray balloon or put a window on screen, and an ApplicationContext has
         /// no handle of its own to cross onto.
@@ -107,8 +107,7 @@ namespace Substation.Capture
 
         /// <summary>
         /// A tray balloon, or nothing at all when the node is running invisible.
-        /// Callable from any thread: the uplink and the socket both report this
-        /// way, and neither of them is on the UI thread.
+        /// Callable from any thread.
         /// </summary>
         public void Notify(string title, string text, bool error)
         {

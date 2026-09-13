@@ -1,43 +1,72 @@
 # Substation OCR — architecture
 
-Two applications gather the hourly readings from two SCADA displays. There is no
-operator application any more: nothing is printed, nothing is exported to Excel.
-The system gathers values and hands them to a phone as a QR code.
+One program gathers the hourly readings from a SCADA display and hands them to a
+phone as a QR code. It runs on both substation PCs — the 132 kV and the 33 kV —
+with a different config on each. There is no operator application any more:
+nothing is printed, nothing is exported to Excel.
 
-## The two nodes
+## One program, two PCs
 
 ```
  ┌─────────────────────────────────────┐      ┌─────────────────────────────────────┐
- │  33 kV SERVER          [ CLIENT ]   │      │  132 kV SERVER         [ SERVER ]   │
+ │  132 kV PC                          │      │  33 kV PC                           │
  │                                     │      │                                     │
  │  main screen   — operator desktop   │      │  main screen   — operator desktop   │
- │  SECOND screen — 33 kV wall view    │      │  SECOND screen — 132 kV wall view   │
- │            │                        │      │            │              ▲         │
- │            ▼                        │      │            ▼              │         │
- │  SubstationOcrClient.exe            │      │  SubstationOcrServer.exe  │         │
- │   nodeId "S33"                      │      │   nodeId "S132"           │         │
- │   • reads its SECOND screen at :02  │      │   • reads its SECOND      │         │
- │   • OCRs only the marked boxes      │      │     screen at :02         │         │
- │   • PUSHES the values ─────────────────────▶ • LISTENS on TCP 5115     │         │
- │   • queues and retries if the       │      │   • merges both nodes     │         │
- │     link is down                    │      │   • Ctrl+Shift+7+8+9 ─────┘         │
- │                                     │      │     flashes the QR on the MAIN      │
- │   no window, no tray icon           │      │     screen for 3-5 s, then hides    │
- └─────────────────────────────────────┘      └─────────────────────────────────────┘
+ │  SECOND screen — 132 kV wall view   │      │  SECOND screen — 33 kV wall view    │
+ │            │              ▲         │      │            │              ▲         │
+ │            ▼              │         │      │            ▼              │         │
+ │  SubstationOcr.exe        │         │      │  SubstationOcr.exe        │         │
+ │   nodeId "S132"           │         │      │   nodeId "S33"            │         │
+ │   • reads its SECOND      │         │      │   • reads its SECOND      │         │
+ │     screen at :02         │         │      │     screen at :02         │         │
+ │   • keeps the hour on     │         │      │   • keeps the hour on     │         │
+ │     its own disk          │         │      │     its own disk          │         │
+ │   • Ctrl+Shift+7+8+9 ─────┘         │      │   • Ctrl+Shift+7+8+9 ─────┘         │
+ │     flashes columns 1–8             │      │     flashes columns 9–24            │
+ │     as a QR on the MAIN screen      │      │     as a QR on the MAIN screen      │
+ └──────────────────┬──────────────────┘      └──────────────────┬──────────────────┘
+                    │                                            │
+                    │   no network link between the PCs          │
+                    └─────────────────────┬──────────────────────┘
+                                          ▼
+                                Android companion app
+                             scans both codes and merges
+                             them by date into one sheet
 ```
 
-| | 33 kV node | 132 kV node |
+| | 132 kV PC | 33 kV PC |
 |---|---|---|
-| Executable | `SubstationOcrClient.exe` | `SubstationOcrServer.exe` |
-| Socket role | client — connects out and pushes | server — listens on TCP 5115 |
+| Executable | `SubstationOcr.exe` | `SubstationOcr.exe` |
+| Config beside the exe | `node.config.json` ← `Config\node-132kv.config.json` | `node.config.json` ← `Config\node-33kv.config.json` |
+| `nodeId` | `S132` | `S33` |
+| ROI file | `Config\roi-132kv.json` | `Config\roi-33kv.json` |
 | Screen read | its own **secondary** screen | its own **secondary** screen |
-| Holds the session | its own hours only | **both** nodes' hours |
-| QR display | — | full screen on the **main** screen |
-| Hotkey | — | Ctrl+Shift+7 → 8 → 9 |
+| QR columns | 1–8 | 9–24 |
+| QR display | full screen on the **main** screen | full screen on the **main** screen |
+| Hotkey | Ctrl+Shift+7 → 8 → 9 | Ctrl+Shift+7 → 8 → 9 |
 
-Both are the same underneath: the capture, OCR and storage code lives in
-`Shared/` and is compiled into each. Only the socket role, the QR display and
-the hotkey differ.
+The two copies are the same build; only `node.config.json` differs. The capture,
+OCR, storage and QR code live in `Shared/`, and the program around them in
+`SubstationOcr/`.
+
+A config is never written for you. Started without `node.config.json` the
+program says which file to copy and exits, because a default would have to be
+one of the two PCs, and a 33 kV PC quietly running as 132 kV reads the wrong
+boxes all night.
+
+## Why there is no link
+
+The previous design had the 33 kV node push its values to the 132 kV node over
+TCP 5115, and one code carried the whole sheet. The substation PCs rule that
+out: both run local accounts without administrator rights, Windows Firewall
+blocks inbound connections to either of them (ping answers, a TCP connection
+does not), and adding a firewall rule or creating a shared folder both need an
+administrator. Nothing the node could do from a standard account gets a value
+from one PC to the other.
+
+So the join moved to the phone, which already carries the logsheet: each PC
+shows its own half, and the app fills one sheet from both scans. The networked
+version is kept, unchanged, on the `V2-client-server` branch.
 
 ## Screens
 
@@ -45,11 +74,12 @@ Each node reads the **secondary** screen — the head carrying the SCADA wall
 view — and leaves the main screen alone. That is `"captureScreen": "secondary"`
 in both configs, which resolves to the first non-primary display.
 
-The one place the main screen is used is the QR flash on the 132 kV node. It
-appears centred, borderless and on top, and it takes **no focus**: the SCADA
-application underneath keeps the keyboard the whole time.
+The main screen is used only when someone asks for something: the QR flash, and
+the calibration window. The QR appears centred, borderless and on top, and it
+takes **no focus**: the SCADA application underneath keeps the keyboard the
+whole time.
 
-If a node has only one display attached, "secondary" has nothing to resolve to.
+If a PC has only one display attached, "secondary" has nothing to resolve to.
 It falls back to the primary screen and says so in the log rather than silently
 reading the wrong thing for days.
 
@@ -64,14 +94,16 @@ A session runs from **07:00 to 07:00 the next morning** — 24 readings, taken a
 
 The session is pinned when a node starts and never recomputed. A node left
 running past 07:00 goes quiet — it does not roll into the next day on its own.
-**Starting the next session is a manual act**: someone runs the two executables
-again.
+**Starting the next session is a manual act**: someone starts the program on
+both PCs again.
 
-That is deliberate, and it is why neither node schedules itself for tomorrow.
+That is deliberate, and it is why the node never schedules itself for tomorrow.
+Both PCs work out the session date the same way, which matters now: it is the
+date the phone merges the two scans by.
 
 By default a node that reaches 07:00 stays in memory but idle, so the QR hotkey
 still works at exactly the moment the day is read. Set `exitWhenSessionEnds` to
-`true` in either config if you would rather the process quit.
+`true` if you would rather the process quit.
 
 `runAtLogon` (off by default) registers the node under the per-user `Run` key so
 it survives a reboot. That is a different thing from the daily restart: it fires
@@ -80,17 +112,17 @@ again and tomorrow's session is still started by hand.
 
 ## Only the marked boxes are read
 
-Each node carries an ROI file listing the boxes it reads. Nothing else on the
+Each PC carries an ROI file listing the boxes it reads. Nothing else on the
 screen is touched — these are the red-outlined boxes on the two wall views.
 
-**132 kV wall view** — `SubstationOcrServer/Config/roi-132kv.json`
+**132 kV wall view** — `SubstationOcr/Config/roi-132kv.json`
 
 | ROI | SCADA label | Rows | → columns |
 |---|---|---|---|
 | `YARMJA` | OHL-1 OLD YARMJA | KV, A, MW, MVAR | 1–4 |
 | `QAYARA` | OHL-2 QAYARA | KV, A, MW, MVAR | 5–8 |
 
-**33 kV wall view** — `SubstationOcrClient/Config/roi-33kv.json`
+**33 kV wall view** — `SubstationOcr/Config/roi-33kv.json`
 
 | ROI | SCADA label | Rows | → columns |
 |---|---|---|---|
@@ -114,14 +146,18 @@ columns are not wanted.
 ## Channels and columns
 
 A node reports **channels**, named `<ROI>.<row>` — `T1.MW`, `YARMJA.KV`. The
-column map in `server.config.json` binds each of the 24 columns to one channel
-on one node:
+`columns` block in `node.config.json` binds a logsheet column to one channel on
+one node:
 
 ```json
 { "col": 11, "source": "S33", "channel": "T1.MW", "label": "T1 MW", "busClass": "33" }
 ```
 
-Only the 132 kV node needs this map — it is the one that builds the QR payload.
+A PC fills only the columns whose `source` is its own `nodeId`. The shipped
+configs list just those — columns 1–8 in the 132 kV one, 9–24 in the 33 kV one.
+A config listing all 24 works too: the other PC's columns simply stay empty. A
+config that gives a PC no columns at all is reported in the log at start-up,
+and again on the QR surface when someone asks for the code.
 
 ## How a value is read
 
@@ -143,80 +179,34 @@ filled positionally — but only if that pass found exactly as many numbers as t
 box declares rows. Anything else would be guessing which number belongs to which
 row.
 
-## The link
+Every reading is kept on the PC that took it, as
+`Data\Readings-yyyy-MM-dd\HH-NODEID.json`. A node restarted mid-session picks
+those hours back up, so its code still carries the whole session.
 
-The client pushes; the server never calls out. Each push is a `push_batch`
-carrying every hour the client has not had acknowledged, so one round trip
-drains a whole backlog.
+## Checking the boxes
 
-- Every message is signed with HMAC-SHA256 under a shared secret and carries a
-  timestamp; anything more than two minutes old is rejected.
-- `allowedClients` on the server restricts which hosts may connect at all.
-- The server refuses any frame whose `nodeId` matches its own, so a
-  misconfigured client cannot overwrite the 132 kV values.
-
-**Values cross the wire, never screen captures.** An hour costs about two
-kilobytes.
-
-If the link is down the client keeps reading and storing on its own disk and
-retries every `retrySeconds` (default 120). A link that returns at 03:00 still
-delivers the whole night.
-
-### The reverse channel
-
-The socket only ever opens one way, so the 132 kV node cannot reach into the
-33 kV node when an engineer asks it to. It parks the instruction instead, and
-the client collects it on its next `poll` — every `pollSeconds` (default 20),
-and free of charge on the back of any push it was making anyway.
-
-```
-132 kV seat                          33 kV node
-     |  "ask S33 for its boxes"           |
-     |------ parked in the queue          |
-     |                                    |
-     |          poll (every 20 s) --------|
-     |------ calibrate (request id) ----->|
-     |                                    |  reads its own screen,
-     |                                    |  OCRs the marked boxes,
-     |                                    |  draws them on the capture
-     |<----- calibration (picture) -------|
-     |  window opens on the operator      |
-```
-
-An instruction waits ten minutes and is then dropped. Nothing is queued
-automatically: a request exists only because somebody asked for one.
-
-This is the one place a picture crosses the wire — never a reading, and never
-anything that reaches the QR payload. It is narrowed to `calibrationMaxWidth`
-(default 1920) first, and re-encoded as JPEG if the PNG would not fit the
-protocol's 8 MiB line.
-
-## Checking the boxes from one seat
-
-Both wall views can be checked from the 132 kV operator's chair. The tray menu
-there offers **Check this node's boxes** and **Ask S33 for its boxes**; both end
-up in the same window, showing the capture with every ROI drawn on it:
+On each PC the tray menu offers **Check this PC's boxes**. It reads the screen,
+runs the OCR, and opens a window showing the capture with every ROI drawn on it:
 
 - **green** every row in the box read, **amber** some, **red** none, **grey**
   switched off;
 - the value each row produced, printed beside the box — `T1  A=200.00
   MW=-10.77  MVAR=3.20`, and `MW=?` where nothing came out;
-- a header stamping the node, machine, screen, ROI reference size and the time,
-  so a picture that has travelled to another machine can still be placed.
+- a header stamping the node, machine, screen, ROI reference size and the time.
 
 The window zooms (wheel, `+`/`-`, double-click for 100%) and pans, because a box
 that clips a digit is a few pixels wrong, not obviously wrong.
 
-Every shot is kept as a PNG under `Calibration\` on the node that took it, and
-the 132 kV node also keeps the ones sent to it — so a commissioning session
-leaves one folder holding both wall views.
+Every shot is kept as a PNG under `Calibration\` on the PC that took it.
 
 ## The QR handoff
 
 Hold **Ctrl+Shift**, then press **7**, **8**, **9** — each within three seconds
-of the last. The 132 kV node builds the payload from everything gathered so far
-and shows it full screen for `qrSeconds` (3–5, default 5). The same sequence
-takes it down again; so do Esc and a click.
+of the last. The node builds the payload from everything this PC has gathered
+so far and shows it full screen for `qrSeconds` (3–5, default 5). The same
+sequence takes it down again; so do Esc and a click. The caption above the code
+names the substation, the node and the session date, so the operator can see
+which PC's code is up.
 
 The payload is **`LS1`**, the format the existing Android companion app already
 parses, taken unchanged from the PreV2 branch:
@@ -225,14 +215,27 @@ parses, taken unchanged from the PreV2 branch:
 LS1 <YYYYMMDD>*[-]HH:c1.c2. ... .c24*[-]HH:...
 ```
 
-Every character stays inside the QR alphanumeric table, which keeps the symbol
-in alphanumeric mode — two characters per 11 bits instead of eight bits each. A
-full 24-hour session is version 33 at ECC M that way, against version 40 in byte
-mode. Error correction is M, stepping down to L only if the session will not
-fit. There is no splitting across codes: the app parses one payload.
+Each PC writes all 24 cells of every row and fills only its own:
 
-Full contract, and the one line the phone needs changed for the 07:00 day, in
-[QR-ANDROID.md](QR-ANDROID.md).
+```
+132 kV PC:  LS1 20260913*07:129.0.0.0.128.171.35.9................
+33 kV PC:   LS1 20260913*07:........33.200.10.3.33.185.9.2.33.170.8.2.4..2.1
+```
+
+The phone merges them: when a scan has the same date as the sheet on screen, its
+non-empty cells overwrite and its empty cells keep what is already there. An
+empty cell never erases a value, so scanning the same PC again later in the day
+only adds its newer hours.
+
+Every character stays inside the QR alphanumeric table, which keeps the symbol
+in alphanumeric mode — two characters per 11 bits instead of eight bits each.
+Measured with every cell three digits wide, a full day is version 23 on the
+132 kV PC and version 29 on the 33 kV PC at ECC M. Error correction is M,
+stepping down to L only if the session will not fit.
+There is no splitting across codes: the app parses one payload per scan.
+
+Full contract, the merge rule, and the one line the phone needs changed for the
+07:00 day, in [QR-ANDROID.md](QR-ANDROID.md).
 
 ### The hotkey
 
@@ -247,51 +250,47 @@ Ctrl rather than Alt on purpose — Alt+Shift is the input-language toggle on
 Arabic systems.
 
 The registrations are owned by a window that is created but never shown, and
-re-registered if Windows ever recreates its handle.
+re-registered if Windows ever recreates its handle. If another program already
+holds the keys — the old WinLogosheet does — the log says so and the code can
+still be shown from the tray menu.
 
 ## Files
 
 ```
-Shared/Protocol/     wire types, compiled into both nodes
+Shared/Protocol/     data types
   Json.cs            JSON via System.Web.Extensions — no NuGet needed
-  AgentProtocol.cs   framing, HMAC signing, command names
-  ReadingFrame.cs    what a node reports for one hour
+  ReadingFrame.cs    what a node reads for one hour
   RoiDefinition.cs   the ROI file model
   ColumnMap.cs       channel → column bindings
   NumberFormat.cs    OCR text → number
-Shared/Capture/      capture and OCR, compiled into both nodes
-  NodeConfig.cs      the settings both nodes share
+Shared/Capture/      capture and OCR
+  NodeConfig.cs      node.config.json
   SessionClock.cs    the 07:00 → 07:00 window and hour ordering
   ScreenGrabber.cs   secondary-screen resolution, capture, crop, upscale
   RoiOcrEngine.cs    row banding, binarisation, Tesseract
   CaptureService.cs  one hourly reading, calibration shot
   CalibrationShot.cs what a calibration is: boxes, values, the annotated picture
-  HourStore.cs       on-disk store, keyed by hour AND node
+  HourStore.cs       on-disk store, keyed by hour and node
   HourlyScheduler.cs the :02 trigger, bounded by the run window
   NodeLog.cs         day-stamped log file
+  NodeEnvironment.cs .NET, Windows and Visual C++ runtime, for the log
+  TessData.cs        finds Tesseract's language data
   HiddenHost.cs      windowless host, optional tray icon
   LogonAutostart.cs  optional per-user Run entry
 Shared/Qr/
   QrEncoder.cs       self-contained QR encoder, byte and alphanumeric modes
   LogsheetQr.cs      the LS1 payload the phone scans
 
-SubstationOcrServer/   132 kV
-  Program.cs           start-up and QR assembly
-  ServerConfig.cs      server.config.json
-  ReadingServer.cs     TCP listener, accepts pushes
-  MergedStore.cs       both nodes' hours → 24-column rows
+SubstationOcr/         the program, the same on both PCs
+  Program.cs           start-up, tray menu and QR assembly
+  SessionSheet.cs      this PC's hours → 24-column rows, own columns only
   HotkeySink.cs        Ctrl+Shift+7 → 8 → 9, via RegisterHotKey
   QrFlashWindow.cs     the QR code, and why there is none
-  CommandQueue.cs      instructions parked for the client node
-  CalibrationWindow.cs a calibration shot, zoomable, either node's
-
-SubstationOcrClient/   33 kV
-  Program.cs           start-up
-  ClientConfig.cs      client.config.json
-  ReadingUplink.cs     push with queue and retry, and the command poll
-  ServerLink.cs        one connection to the server node
+  CalibrationWindow.cs a calibration shot, zoomable
+  Config/              node-132kv.config.json, node-33kv.config.json,
+                       roi-132kv.json, roi-33kv.json
 ```
 
 `WinLogosheet/` is the original operator application. It is **not part of this
 pipeline** — no printing, no Excel export, no grid. It is left in the repository
-untouched, and the solution still builds it, but nothing here depends on it.
+untouched, outside the solution, and nothing here depends on it.

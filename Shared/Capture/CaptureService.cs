@@ -174,9 +174,8 @@ namespace Substation.Capture
         /// stored as an hour or sent as a reading.
         ///
         /// Never throws: a failure comes back as a shot carrying the reason, so
-        /// whoever asked sees an answer either way — including from the other
-        /// end of the socket, where a thrown exception would be a dropped
-        /// connection and nothing on screen.
+        /// whoever asked sees an answer either way — a window that says why,
+        /// rather than nothing on screen.
         /// </summary>
         public CalibrationShot Calibrate(bool readValues, int maxImageWidth)
         {

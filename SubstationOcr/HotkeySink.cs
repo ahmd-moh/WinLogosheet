@@ -3,7 +3,7 @@ using System.Collections.Generic;
 using System.Runtime.InteropServices;
 using System.Windows.Forms;
 
-namespace SubstationOcrServer
+namespace SubstationOcr
 {
     /// <summary>
     /// The global QR hotkey: hold Ctrl+Shift and press 7, then 8, then 9.

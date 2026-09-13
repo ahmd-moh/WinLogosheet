@@ -42,7 +42,7 @@ namespace Substation.Capture
                 catch
                 {
                     // A full or read-only disk must not take the node down; the
-                    // reading itself still reaches the store and the socket.
+                    // reading itself still reaches the store.
                 }
             }
 

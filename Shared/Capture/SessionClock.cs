@@ -4,8 +4,9 @@ using System.Globalization;
 namespace Substation.Capture
 {
     /// <summary>
-    /// The run window and the hour numbering, shared by both nodes so they can
-    /// never disagree about which day a reading belongs to.
+    /// The run window and the hour numbering. Both PCs run the same code, so
+    /// their two QR codes can never disagree about which day a reading belongs
+    /// to — and the phone merges the two scans by that day.
     ///
     /// A session runs from 07:00 on its session date to 07:00 the next morning —
     /// 24 hourly readings, taken at :02 past each hour. When the window closes

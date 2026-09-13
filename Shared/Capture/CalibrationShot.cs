@@ -34,58 +34,22 @@ namespace Substation.Capture
                 return n;
             }
         }
-
-        public Dictionary<string, object> ToJson()
-        {
-            var readings = new List<object>();
-            foreach (ChannelReading r in Readings) readings.Add(r.ToJson());
-
-            return new Dictionary<string, object>
-            {
-                { "id", RoiId },
-                { "label", Label },
-                { "enabled", Enabled },
-                { "rect", new Dictionary<string, object>
-                          { { "x", Rect.X }, { "y", Rect.Y }, { "w", Rect.Width }, { "h", Rect.Height } } },
-                { "readings", readings }
-            };
-        }
-
-        public static CalibrationBox FromJson(Dictionary<string, object> node)
-        {
-            Dictionary<string, object> rect = Json.Dict(node, "rect");
-            var box = new CalibrationBox
-            {
-                RoiId = Json.Str(node, "id"),
-                Label = Json.Str(node, "label"),
-                Enabled = Json.Bool(node, "enabled", true),
-                Rect = new Rectangle(Json.Int(rect, "x", 0), Json.Int(rect, "y", 0),
-                                     Json.Int(rect, "w", 0), Json.Int(rect, "h", 0))
-            };
-
-            foreach (object r in Json.List(node, "readings"))
-                box.Readings.Add(ChannelReading.FromJson(Json.Dict(r)));
-
-            return box;
-        }
     }
 
     /// <summary>
-    /// What one node's screen looked like through its own ROI file: the capture
+    /// What this PC's screen looked like through its own ROI file: the capture
     /// with every box drawn on it, plus what each box read at that moment.
     ///
-    /// This is the only place a picture crosses the wire. It is not a reading —
-    /// nothing here is stored as an hour or ever reaches the QR payload — it is
-    /// the answer to "are that node's boxes still on the right panels?", asked
-    /// from the 132 kV seat instead of by walking to the other server.
+    /// It is not a reading — nothing here is stored as an hour or ever reaches
+    /// the QR payload — it is the answer to "are the boxes still on the right
+    /// panels?".
     /// </summary>
     public sealed class CalibrationShot
     {
-        /// <summary>A PNG larger than this is re-encoded as JPEG before it goes
-        /// on the wire. The protocol caps a line at 8 MiB and base64 costs a
-        /// third on top, so a big wall view has to give up something; the boxes
-        /// and the digits survive JPEG, the file size does not survive PNG.</summary>
-        public const int PngWireBudget = 3 * 1024 * 1024;
+        /// <summary>A PNG larger than this is re-encoded as JPEG. The boxes and
+        /// the digits survive JPEG, and a very large wall view kept as PNG costs
+        /// disk for nothing.</summary>
+        public const int PngBudget = 3 * 1024 * 1024;
 
         public string NodeId = "";
         public string DisplayName = "";
@@ -171,7 +135,7 @@ namespace Substation.Capture
         // -- The picture ----------------------------------------------------
 
         /// <summary>
-        /// Encodes the annotated capture for transport, narrowing it to
+        /// Encodes the annotated capture, narrowing it to
         /// <paramref name="maxWidth"/> first (0 keeps the full resolution).
         /// </summary>
         public void SetImage(Bitmap annotated, int maxWidth)
@@ -200,7 +164,7 @@ namespace Substation.Capture
                 using (var png = new MemoryStream())
                 {
                     sized.Save(png, System.Drawing.Imaging.ImageFormat.Png);
-                    if (png.Length <= PngWireBudget)
+                    if (png.Length <= PngBudget)
                     {
                         Image = png.ToArray();
                         ImageFormat = "png";
@@ -255,9 +219,8 @@ namespace Substation.Capture
 
         /// <summary>
         /// Writes the picture under the given folder as
-        /// <c>nodeId-yyyyMMdd-HHmmss.png</c> and remembers where it went. Both
-        /// nodes save their own; the server also saves what it is sent, so a
-        /// commissioning session leaves one folder holding both wall views.
+        /// <c>nodeId-yyyyMMdd-HHmmss.png</c> and remembers where it went, so a
+        /// commissioning session leaves a record of how the boxes sat.
         /// </summary>
         public string SaveTo(string folder)
         {
@@ -274,69 +237,6 @@ namespace Substation.Capture
             File.WriteAllBytes(path, Image);
             SavedPath = path;
             return path;
-        }
-
-        // -- Wire form ------------------------------------------------------
-
-        public Dictionary<string, object> ToJson()
-        {
-            var boxes = new List<object>();
-            foreach (CalibrationBox box in Boxes) boxes.Add(box.ToJson());
-
-            return new Dictionary<string, object>
-            {
-                { "nodeId", NodeId },
-                { "displayName", DisplayName },
-                { "machine", Machine },
-                { "agentVersion", AgentVersion },
-                { "screen", ScreenDescription },
-                { "screenWidth", ScreenWidth },
-                { "screenHeight", ScreenHeight },
-                { "referenceWidth", ReferenceWidth },
-                { "referenceHeight", ReferenceHeight },
-                { "takenUtc", TakenUtc.ToString("o", CultureInfo.InvariantCulture) },
-                { "error", Error },
-                { "imageFormat", ImageFormat },
-                { "image", Image == null ? "" : Convert.ToBase64String(Image) },
-                { "boxes", boxes }
-            };
-        }
-
-        public static CalibrationShot FromJson(Dictionary<string, object> node)
-        {
-            var shot = new CalibrationShot
-            {
-                NodeId = Json.Str(node, "nodeId"),
-                DisplayName = Json.Str(node, "displayName"),
-                Machine = Json.Str(node, "machine"),
-                AgentVersion = Json.Str(node, "agentVersion"),
-                ScreenDescription = Json.Str(node, "screen"),
-                ScreenWidth = Json.Int(node, "screenWidth", 0),
-                ScreenHeight = Json.Int(node, "screenHeight", 0),
-                ReferenceWidth = Json.Int(node, "referenceWidth", 0),
-                ReferenceHeight = Json.Int(node, "referenceHeight", 0),
-                Error = Json.Str(node, "error"),
-                ImageFormat = Json.Str(node, "imageFormat", "png")
-            };
-
-            DateTime taken;
-            if (DateTime.TryParse(Json.Str(node, "takenUtc"), CultureInfo.InvariantCulture,
-                                  DateTimeStyles.RoundtripKind, out taken))
-                shot.TakenUtc = taken.ToUniversalTime();
-
-            string image = Json.Str(node, "image");
-            if (!string.IsNullOrEmpty(image))
-            {
-                // A picture that will not decode is a damaged shot, not a dead
-                // node: keep the numbers and say so in the error line.
-                try { shot.Image = Convert.FromBase64String(image); }
-                catch (FormatException) { shot.Error = "the picture did not survive the wire (bad base64)"; }
-            }
-
-            foreach (object box in Json.List(node, "boxes"))
-                shot.Boxes.Add(CalibrationBox.FromJson(Json.Dict(box)));
-
-            return shot;
         }
     }
 }

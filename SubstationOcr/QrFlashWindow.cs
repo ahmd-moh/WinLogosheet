@@ -4,14 +4,14 @@ using System.Drawing.Drawing2D;
 using System.Drawing.Text;
 using System.Windows.Forms;
 
-namespace SubstationOcrServer
+namespace SubstationOcr
 {
     /// <summary>
     /// Full-screen surface showing only the QR code — no buttons, no labels, no
-    /// chrome. This is the one thing either node ever puts on screen.
+    /// chrome. This is the one thing the node ever puts on screen unasked.
     ///
-    /// It targets the MAIN screen: on these servers the secondary head carries
-    /// the SCADA wall view being read, so the code goes on the operator's own
+    /// It targets the MAIN screen: on these PCs the secondary head carries the
+    /// SCADA wall view being read, so the code goes on the operator's own
     /// display. `qrScreen` in the config overrides that.
     ///
     /// It closes on Esc, on a click, on the hotkey again, or after qrSeconds.
@@ -21,7 +21,7 @@ namespace SubstationOcrServer
     /// Failing silently is worse than useless here: from in front of the screen
     /// a hotkey nobody registered, a hotkey another program stole, and a night
     /// of OCR reading nothing all look identical, and the log that tells them
-    /// apart is on a machine the operator is not sitting at.
+    /// apart is a file the operator never sees.
     /// </summary>
     public sealed class QrFlashWindow : Form
     {

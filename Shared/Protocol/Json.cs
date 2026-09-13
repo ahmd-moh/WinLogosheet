@@ -10,9 +10,9 @@ namespace Substation.Shared
 {
     /// <summary>
     /// Minimal JSON helpers built on JavaScriptSerializer, which ships with the
-    /// .NET Framework (System.Web.Extensions). Both applications share one
-    /// on-the-wire and on-disk format without pulling in a JSON NuGet package —
-    /// the substation servers are offline, so every extra restore is a liability.
+    /// .NET Framework (System.Web.Extensions). The config files and the stored
+    /// hours are read and written without pulling in a JSON NuGet package —
+    /// the substation PCs are offline, so every extra restore is a liability.
     /// </summary>
     public static class Json
     {

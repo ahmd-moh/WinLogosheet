@@ -6,16 +6,16 @@ using System.Globalization;
 using System.Windows.Forms;
 using Substation.Capture;
 
-namespace SubstationOcrServer
+namespace SubstationOcr
 {
     /// <summary>
-    /// Shows one calibration shot — this node's own, or the one the 33 kV node
-    /// sent back — on the 132 kV operator's screen.
+    /// Shows one calibration shot — this PC's wall view with every box drawn on
+    /// it — on the operator's screen.
     ///
     /// Unlike the QR flash this is a window that stays: checking a box sits on
     /// the right panel means looking closely, so it zooms to the pixel and pans,
-    /// and two shots can stand side by side while an engineer compares the two
-    /// wall views without leaving the seat.
+    /// and two shots can stand side by side while an engineer compares a box
+    /// before and after moving it.
     /// </summary>
     public sealed class CalibrationWindow : Form
     {

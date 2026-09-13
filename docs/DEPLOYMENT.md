@@ -2,27 +2,32 @@
 
 ## 1. Build
 
-Open `WinLogosheet.sln`. Build **Release**. Two executables come out:
+Open `WinLogosheet.sln`. Build **Release**. One program comes out, and the same
+build goes on **both** PCs:
 
-| Project | Output | Goes on |
+| Output | Goes on | With config |
 |---|---|---|
-| `SubstationOcrServer` | `SubstationOcrServer.exe` | the **132 kV** server |
-| `SubstationOcrClient` | `SubstationOcrClient.exe` | the **33 kV** server |
+| `SubstationOcr\bin\Release\` | the **132 kV** PC | `Config\node-132kv.config.json` |
+| `SubstationOcr\bin\Release\` | the **33 kV** PC | `Config\node-33kv.config.json` |
 
-Both target **.NET Framework 4.7**, because that is what the substation servers
-run. An exe built for 4.8 does not start on them at all: Windows asks for 4.8
-before a line of the node runs, so not even its log gets written.
+It targets **.NET Framework 4.7**, because that is what the substation PCs run.
+An exe built for 4.8 does not start on them at all: Windows asks for 4.8 before
+a line of the node runs, so not even its log gets written.
 
 Tesseract 5.2.0 is the only package that ships. The 4.7 reference assemblies come
 from `Microsoft.NETFramework.ReferenceAssemblies.net47`, a build-time package, so
 the build works without the 4.7 targeting pack. If Visual Studio offers to
-retarget the projects to 4.8 when the solution opens, decline — or install
+retarget the project to 4.8 when the solution opens, decline — or install
 **.NET Framework 4.7 targeting pack** from the Visual Studio Installer
-(*Individual components*) and it stops asking. JSON goes through
+(*Individual components*) and it stops asking. If a retarget slips through, the
+build stops with an error saying what to set back: `TargetFrameworkVersion` in
+`SubstationOcr.csproj` and the `sku` in `App.config` must both say 4.7, and
+`requireReinstallation="true"` can be removed from `packages.config` again.
+JSON goes through
 `System.Web.Extensions` (part of the .NET Framework), and the QR encoder is
 written out in full. Restore packages once and build.
 
-### What both servers need
+### What both PCs need
 
 | Needs | Check | Without it |
 |---|---|---|
@@ -32,74 +37,58 @@ written out in full. Restore packages once and build.
 
 Each node writes what it found as its second log line — `Running on .NET
 Framework 4.7.2 (release 461814), … x64 process, Visual C++ runtime 14.40…` — so
-one look at a node's log settles which of these that server has.
+one look at a node's log settles which of these that PC has.
 
-The third project, `WinLogosheet`, is the old operator application. It is not
-part of this pipeline; you can ignore it or unload it.
+**Nothing on the network.** The two PCs never connect to each other, so there is
+no port to open, no firewall rule, no shared secret and no shared folder. The
+program runs from a standard account; only installing the Visual C++ runtime
+needs an administrator, on a PC that lacks it.
 
-## 2. Pick a shared secret
+The `WinLogosheet/` folder is the old operator application. It is not part of
+this pipeline or of the solution.
 
-Any long random string. The same value goes in **both** config files. Without
-it the server accepts unsigned pushes from anything on the LAN, and it logs a
-warning at start-up saying so.
+## 2. Install on each PC
 
-## 3. Install on the 132 kV server
+Do the same on both PCs:
 
-1. Copy the `SubstationOcrServer` release output to e.g. `C:\SubstationOcr\`.
-2. Copy `Config\server.config.json` beside the exe (the build does this).
-3. Edit it:
-   - `sharedSecret` — from step 2.
-   - `tessDataPath` — where Tesseract is installed on this machine.
+1. Copy the whole `SubstationOcr\bin\Release` folder to e.g. `C:\SubstationOcr\`
+   — any folder the SCADA account can write to. Not under *Program Files*,
+   which needs an administrator.
+2. In that folder, copy the config for **this** PC out of `Config\` and rename
+   the copy `node.config.json`:
+   - 132 kV PC: `Config\node-132kv.config.json`
+   - 33 kV PC: `Config\node-33kv.config.json`
+
+   Started without `node.config.json`, the program shows a message saying
+   exactly this and exits.
+3. Edit `node.config.json`:
+   - `tessDataPath` — where `eng.traineddata` is on this PC.
    - `captureScreen` — leave `"secondary"`. Use `"primary"` or a screen index
      only if the wall view is not on the second head.
-   - `allowedClients` — leave `[]` until the link is proven, then set it to
-     `["<the 33 kV server's IP>"]`.
    - `qrSeconds` — 3 to 5.
    - `qrScreen` — `"primary"` (the operator's own screen, the default),
      `"secondary"`, or a screen index.
-   - `clientNodeId` — the 33 kV node's `nodeId`, `"S33"` unless you renamed it.
-     This is the node this one asks for a calibration.
-   - `calibrationMaxWidth` — how wide a calibration picture to ask that node
-     for. 1920 is plenty; 0 asks for the screen's full resolution.
-   - `runAtLogon` — `true` to have this node start when the SCADA account logs
+   - `showTrayIcon` — `true` while commissioning; see step 3.
+   - `runAtLogon` — `true` to have the node start when the SCADA account logs
      on. See [below](#surviving-a-reboot-runatlogon).
-4. Open **TCP 5115 inbound** in Windows Firewall for this program.
+   - Leave `nodeId`, `roiConfigPath` and `columns` as shipped. They are what
+     make this copy the 132 kV or the 33 kV one.
 
-## 4. Install on the 33 kV server
-
-1. Copy the `SubstationOcrClient` release output to e.g. `C:\SubstationOcr\`.
-2. Copy `Config\client.config.json` beside the exe (the build does this).
-3. Edit it:
-   - `sharedSecret` — the **same** string.
-   - `serverHost` — the 132 kV server's LAN address.
-   - `tessDataPath`, `captureScreen`, `runAtLogon` — as above.
-   - `pollSeconds` — how often this node asks the 132 kV node whether it wants
-     anything, 20 by default. It is what lets the boxes here be checked from
-     that seat; 0 switches it off.
-
-No inbound firewall rule is needed here; the client only connects out.
-
-## 5. Check the boxes on both nodes
+## 3. Check the boxes on each PC
 
 The shipped rectangles were measured on a 1885 x 941 reference capture of each
-wall view. If a server runs at a different resolution the rectangles are scaled
-proportionally, but check before trusting a whole night. The nodes capture in
+wall view. If a PC runs at a different resolution the rectangles are scaled
+proportionally, but check before trusting a whole night. The node captures in
 physical pixels, so Windows display scaling (125%, 150%) does not change what
-they read.
+it reads.
 
-**Do this from the 132 kV seat.** Both wall views can be checked from there —
-the 33 kV node is asked for its own picture and sends it back — so nobody has to
-sit at the other server.
+Each PC checks its own wall view, so do this on both. With `"showTrayIcon":
+true` in `node.config.json`, start the node. From its tray icon:
 
-Set `"showTrayIcon": true` in `server.config.json` and start the node. From its
-tray icon:
-
-1. **Check this node's boxes (S132)** — reads this screen, runs the OCR and
-   opens the capture with every box drawn on it.
-2. **Ask S33 for its boxes** — the request waits until that node's next poll
-   (about 20 s) and then the same window opens with the 33 kV wall view. The
-   33 kV node needs no tray icon and nobody needs to be in front of it.
-3. **Open calibration folder** — every shot, both nodes', kept as a PNG.
+1. **Check this PC's boxes (S132)** — or **(S33)** — reads this screen, runs the
+   OCR and opens the capture with every box drawn on it. The shot is also kept
+   under `Calibration\`.
+2. **Open calibration folder** — every shot this PC has taken, as PNGs.
 
 In the window: **green** means every row in that box was read, **amber** some,
 **red** none, **grey** switched off. The value each row produced is printed
@@ -111,33 +100,21 @@ So, box by box:
 1. Every box should sit on the black value panel, tight but not clipping digits.
 2. Every enabled box should be green, with the numbers beside it matching what
    the wall view shows.
-3. If one is off, edit its `rect` in that node's ROI file — the rectangles the
-   picture is drawn from are in real screen pixels — then **Reload ROI
-   configuration** on that node. No restart needed.
-4. Ask for the picture again and confirm.
+3. If one is off, edit its `rect` in this PC's ROI file (`Config\roi-132kv.json`
+   or `Config\roi-33kv.json`) — the rectangles the picture is drawn from are in
+   real screen pixels — then **Reload ROI configuration**. No restart needed.
+4. Check the boxes again and confirm.
 
-Repeat until every value reads correctly, then set `showTrayIcon` back to
-`false` so the node runs invisible.
+Repeat until every value reads correctly. Then set `showTrayIcon` back to
+`false` if the node should run invisible — but keep it `true` on a PC where the
+old WinLogosheet still runs, because it holds the QR hotkey and the tray is then
+the only way to show the code.
 
-### If nothing comes back
+### From the command line
 
-The 132 kV node says so 90 seconds after you ask, and which of the two it is:
-
-| It says | Means |
-|---|---|
-| *has not asked for work since* | that node is not running, its `nodeId` is not `clientNodeId`, or its `pollSeconds` is 0 |
-| *took the request but sent nothing back* | it collected the request and its capture or OCR failed — its log says why |
-
-A calibration request is dropped if nobody collects it within ten minutes, so a
-click made while the other node was switched off cannot surprise you at 03:00.
-
-### From the node itself
-
-If you are standing at either machine instead, set `showTrayIcon` there and use
-**Write calibration overlay** — the same picture, written under `Calibration\`.
-The 33 kV node also offers **Send calibration to the 132 kV node**, which pushes
-it to the other seat unasked. Either exe also takes `--calibrate` on the command
-line: it writes one overlay and quits.
+`SubstationOcr.exe --calibrate` writes one overlay under `Calibration\` and
+quits. `SubstationOcr.exe --capture-once` reads the current hour once, stores
+it, and quits.
 
 ### Adjusting a box
 
@@ -151,44 +128,52 @@ line: it writes one overlay and quits.
 | `invert` | `false` if the panel is dark text on a light background |
 | `enabled` | `false` to stop reading a box entirely |
 
-## 6. Daily operation
+## 4. Daily operation
 
-**At 07:00 each morning, start both executables by hand.** Order does not
-matter — the client queues anything it cannot deliver yet.
+**At 07:00 each morning, start the program on both PCs by hand.** Order does
+not matter — they never wait for each other.
 
 That is the whole daily routine. From then on:
 
-- Each node reads its secondary screen at :02 past every hour.
-- The client pushes its values to the 132 kV node; a failed push is retried
-  every two minutes until it lands.
-- Neither node shows anything. No window, no taskbar entry, no tray icon.
-- At **07:00 the next morning** both nodes stop reading and go quiet. They do
-  not start the next session on their own.
+- Each PC reads its secondary screen at :02 past every hour and keeps the hour
+  on its own disk.
+- Neither shows anything unasked. No window, no taskbar entry.
+- At **07:00 the next morning** both stop reading and go quiet. They do not
+  start the next session on their own.
 
 ### Reading the day
 
-On the **132 kV server**, hold **Ctrl+Shift** and press **7**, then **8**, then
-**9** — each press within three seconds of the last. The QR code fills the main
-screen for 3–5 seconds, then hides. Scan it with the Android app.
+1. On the **132 kV PC**, hold **Ctrl+Shift** and press **7**, then **8**, then
+   **9** — each press within three seconds of the last. The QR code fills the
+   main screen for 3–5 seconds, then hides. Scan it with the Android app.
+2. Do the same on the **33 kV PC**, and scan its code too.
+
+Either PC can go first. The caption above each code names the node (`S132` or
+`S33`), the session date and how many hours the code carries. The app merges a
+scan into the sheet already on screen when both have the same date, so after
+both scans the sheet has all 24 columns; until then the other PC's columns are
+empty.
 
 The same sequence while the code is up takes it down. So do **Esc** and a click.
-Both the top-row and numpad 7/8/9 work.
+Both the top-row and numpad 7/8/9 work, and the tray menu's **Show QR code
+now** does the same.
 
-You can do this at any point during the session, not only at the end — the code
-carries everything gathered so far, and the caption above it says how many hours
-that is.
+You can do this at any point during the session, not only at the end — each
+code carries everything that PC has gathered so far. Scanning a PC again later
+just brings its newer hours in.
 
-It is always a **single** code: the payload is the `LS1` format the companion app
-already parses, and that app has no notion of multi-part codes. If a session
-ever will not fit at error correction M the node drops to L automatically.
+Each PC's code is a **single** code: the payload is the `LS1` format the
+companion app already parses, and that app has no notion of multi-part codes. If
+a session ever will not fit at error correction M the node drops to L
+automatically.
 
 ### Surviving a reboot: `runAtLogon`
 
-Set `"runAtLogon": true` in either config and that node registers itself under
-the per-user `Run` key, so it comes back when the SCADA account logs on. No
-administrator rights are needed, and the node lands in the interactive session —
-which it must, because a background session can neither capture the screen nor
-own a global hotkey.
+Set `"runAtLogon": true` in `node.config.json` and the node registers itself
+under the per-user `Run` key, so it comes back when the SCADA account logs on.
+No administrator rights are needed, and the node lands in the interactive
+session — which it must, because a background session can neither capture the
+screen nor own a global hotkey.
 
 The setting is authoritative in both directions: setting it back to `false` and
 starting the node once **removes** the entry. The registered command is
@@ -201,41 +186,40 @@ out the entry never fires again — starting tomorrow's session is still a manua
 act, as specified.
 
 If you want the session started for you as well, use a Task Scheduler task on
-each server instead: trigger **Daily at 07:00**, **Run only when user is logged
+each PC instead: trigger **Daily at 07:00**, **Run only when user is logged
 on**, action the executable.
 
-Do **not** register either node as a Windows service — a service cannot capture
+Do **not** register the node as a Windows service — a service cannot capture
 the screen.
 
-## 7. Troubleshooting
+## 5. Troubleshooting
 
-Everything goes to `Logs\node-YYYY-MM-DD.log` on each node.
+Everything goes to `Logs\node-YYYY-MM-DD.log` on each PC.
 
 | Symptom | Where to look |
 |---|---|
-| `Logs\` stays empty after starting a node | the node never started. Usually the .NET Framework is older than 4.7 — see [What both servers need](#what-both-servers-need). A second copy already running also exits without a word: check Task Manager |
+| Message box: `Could not read …\node.config.json` | the message says why: the file is missing (copy this PC's config out of `Config\`, step 2), `nodeId` or `roiConfigPath` is empty, or the JSON is broken |
+| `Logs\` stays empty after starting the node | the node never started. Usually the .NET Framework is older than 4.7 — see [What both PCs need](#what-both-pcs-need). A second copy already running also exits without a word: check Task Manager |
 | Log: `OCR cannot start` | the line names the cause — most often the Visual C++ runtime is missing or too old |
 | Node did not come back after a reboot | `runAtLogon` must be `true` **and** the node must have been started once since; the log records `Autostart registered`. It only fires on logon, not on a machine left logged in |
 | Nothing gathered at all | the log's start-up line names the screen being read; if it says "no secondary screen is attached", `captureScreen` needs changing |
-| Client log: "No answer from host:5115" | firewall, wrong `serverHost`, or the server node is not running |
-| Client log: "signature mismatch" | the two `sharedSecret` values differ |
-| Client log: "timestamp outside the accepted window" | the servers' clocks differ by more than 2 minutes |
-| Server log: "Refused connection … not in allowedClients" | add the 33 kV server's IP |
-| Server log: "Discarded a frame … claiming to be this node" | both configs have the same `nodeId` |
-| Values read but wrong | ROI boxes are off — go back to step 5 |
-| Asked S33 for its boxes and nothing came | see [If nothing comes back](#if-nothing-comes-back) — the node says which of the two reasons it is |
-| Ctrl+Shift+7,8,9 does nothing | the log records every press as `Hotkey Ctrl+Shift+N stage X to Y`. No line at all means the registration failed — look for `RegisterHotKey failed`, which means another program owns that combination. A line that resets to stage 0 means the presses were out of order or more than three seconds apart |
-| QR says nothing gathered | no hour has been read yet for the current session |
+| Log: `No column in node.config.json has "source": …` | the `columns` block does not belong to this `nodeId` — use the shipped config for this PC |
+| Values read but wrong | ROI boxes are off — go back to step 3 |
+| The code shows the other PC's columns empty | expected: each PC fills only its own. Scan the other PC's code as well |
+| On the phone, the second scan wiped the first | the app still replaces its sheet on every scan and needs the merge change — see [QR-ANDROID.md](QR-ANDROID.md#two-codes-one-sheet) |
+| Ctrl+Shift+7,8,9 does nothing | the log records every press as `Hotkey Ctrl+Shift+N stage X to Y`. No line at all means the registration failed — look for `QR hotkey is NOT armed`: another program, usually the old WinLogosheet, owns that combination. Close it and restart the node, or use **Show QR code now** from the tray. A line that resets to stage 0 means the presses were out of order or more than three seconds apart |
+| QR says `NO READINGS TO ENCODE` | the line under it says why: no hour read yet, every read failed, or reads worked but recognised nothing |
 
-The hotkey needs the 132 kV node running. After 07:00 it is idle but still
-listening, so the code can still be shown — unless `exitWhenSessionEnds` is set.
+The hotkey needs the node running. After 07:00 it is idle but still listening,
+so the code can still be shown — unless `exitWhenSessionEnds` is set.
 
-**The Android app needs one line changed** for the 07:00 day, or the 07:00 row
-renders at the bottom of its grid. See [QR-ANDROID.md](QR-ANDROID.md#hour-order).
+**The Android app needs two changes**: merging two scans of the same date, and
+one line for the 07:00 day, or the 07:00 row renders at the bottom of its grid.
+See [QR-ANDROID.md](QR-ANDROID.md).
 
-## 8. Housekeeping
+## 6. Housekeeping
 
-Each node keeps `retentionDays` (default 120) of readings under `Data\` and the
+Each PC keeps `retentionDays` (default 120) of readings under `Data\` and the
 same span of logs under `Logs\`, pruning both on the first reading of each
 session. Readings are small — a full session is well under a megabyte.
 
